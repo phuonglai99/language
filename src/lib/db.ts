@@ -19,10 +19,12 @@ function getDb(): Database.Database {
         title TEXT NOT NULL,
         subtitle TEXT,
         level TEXT,
+        topic TEXT,
         created_at TEXT NOT NULL,
         data TEXT NOT NULL
       );
     `);
+    try { _db.exec('ALTER TABLE lessons ADD COLUMN topic TEXT'); } catch { /* already exists */ }
   }
   return _db;
 }
@@ -30,28 +32,40 @@ function getDb(): Database.Database {
 export function getAllLessons(): (Omit<Lesson, 'vocab' | 'grammar'> & { vocabCount: number; grammarCount: number })[] {
   const db = getDb();
   const rows = db.prepare(
-    'SELECT id, title, subtitle, level, created_at, data FROM lessons ORDER BY created_at DESC'
-  ).all() as { id: string; title: string; subtitle: string; level: string; created_at: string; data: string }[];
+    'SELECT id, title, subtitle, level, topic, created_at, data FROM lessons ORDER BY created_at DESC'
+  ).all() as { id: string; title: string; subtitle: string; level: string; topic: string | null; created_at: string; data: string }[];
   return rows.map(r => {
     let vocabCount = 0, grammarCount = 0;
     try { const d = JSON.parse(r.data); vocabCount = d.vocab?.length ?? 0; grammarCount = d.grammar?.length ?? 0; } catch { /* ignore */ }
-    return { id: r.id, title: r.title, subtitle: r.subtitle, level: r.level, createdAt: r.created_at, vocab: [], grammar: [], vocabCount, grammarCount };
+    return { id: r.id, title: r.title, subtitle: r.subtitle, level: r.level, topic: r.topic ?? undefined, createdAt: r.created_at, vocab: [], grammar: [], vocabCount, grammarCount };
   });
 }
 
 export function getLesson(id: string): Lesson | null {
   const db = getDb();
-  const row = db.prepare('SELECT * FROM lessons WHERE id = ?').get(id) as { data: string } | undefined;
+  const row = db.prepare('SELECT * FROM lessons WHERE id = ?').get(id) as { id: string; title: string; subtitle: string; level: string; topic: string | null; created_at: string; data: string } | undefined;
   if (!row) return null;
-  return JSON.parse(row.data) as Lesson;
+  const lesson = JSON.parse(row.data) as Lesson;
+  if (row.topic) lesson.topic = row.topic;
+  let dirty = false;
+  for (const v of lesson.vocab) {
+    if (!v.id) {
+      v.id = Math.random().toString(36).slice(2, 12);
+      dirty = true;
+    }
+  }
+  if (dirty) {
+    db.prepare('UPDATE lessons SET data = ? WHERE id = ?').run(JSON.stringify(lesson), id);
+  }
+  return lesson;
 }
 
 export function saveLesson(lesson: Lesson): void {
   const db = getDb();
   db.prepare(`
-    INSERT OR REPLACE INTO lessons (id, title, subtitle, level, created_at, data)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(lesson.id, lesson.title, lesson.subtitle, lesson.level, lesson.createdAt, JSON.stringify(lesson));
+    INSERT OR REPLACE INTO lessons (id, title, subtitle, level, topic, created_at, data)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(lesson.id, lesson.title, lesson.subtitle, lesson.level, lesson.topic ?? null, lesson.createdAt, JSON.stringify(lesson));
 }
 
 export function deleteLesson(id: string): void {
@@ -227,6 +241,118 @@ export function getMBLessonCount(): number {
   return row.n;
 }
 
+// ── Notes ────────────────────────────────────────────────────────────────────
+
+export const MISTAKE_FOLDER_ID = 'mistake';
+
+export interface NoteFolder {
+  id: string;
+  name: string;
+  isSystem: boolean;
+  createdAt: string;
+}
+
+export interface NoteItem {
+  id: string;
+  folderId: string;
+  zh: string;
+  py: string;
+  vn: string;
+  pos: string;
+  sourceLessonId: string | null;
+  createdAt: string;
+}
+
+function ensureNoteTables(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS note_folders (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      is_system INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS note_items (
+      id TEXT PRIMARY KEY,
+      folder_id TEXT NOT NULL REFERENCES note_folders(id) ON DELETE CASCADE,
+      zh TEXT NOT NULL,
+      py TEXT NOT NULL DEFAULT '',
+      vn TEXT NOT NULL DEFAULT '',
+      pos TEXT NOT NULL DEFAULT '',
+      source_lesson_id TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS note_items_folder ON note_items(folder_id);
+  `);
+  const exists = db.prepare('SELECT id FROM note_folders WHERE id = ?').get(MISTAKE_FOLDER_ID);
+  if (!exists) {
+    db.prepare('INSERT INTO note_folders (id, name, is_system, created_at) VALUES (?, ?, 1, ?)').run(
+      MISTAKE_FOLDER_ID, 'Mistake', new Date().toISOString()
+    );
+  }
+}
+
+export interface NoteFolderWithCount extends NoteFolder { itemCount: number; }
+
+export function getNoteFolders(): NoteFolderWithCount[] {
+  const db = getDb();
+  ensureNoteTables(db);
+  const rows = db.prepare(`
+    SELECT f.id, f.name, f.is_system, f.created_at, COUNT(i.id) as item_count
+    FROM note_folders f
+    LEFT JOIN note_items i ON i.folder_id = f.id
+    GROUP BY f.id
+    ORDER BY f.is_system DESC, f.created_at ASC
+  `).all() as { id: string; name: string; is_system: number; created_at: string; item_count: number }[];
+  return rows.map(r => ({ id: r.id, name: r.name, isSystem: r.is_system === 1, createdAt: r.created_at, itemCount: r.item_count }));
+}
+
+export function createNoteFolder(name: string): NoteFolder {
+  const db = getDb();
+  ensureNoteTables(db);
+  const id = Math.random().toString(36).slice(2, 12);
+  const createdAt = new Date().toISOString();
+  db.prepare('INSERT INTO note_folders (id, name, is_system, created_at) VALUES (?, ?, 0, ?)').run(id, name.trim(), createdAt);
+  return { id, name: name.trim(), isSystem: false, createdAt };
+}
+
+export function renameNoteFolder(id: string, name: string): void {
+  const db = getDb();
+  ensureNoteTables(db);
+  db.prepare('UPDATE note_folders SET name = ? WHERE id = ? AND is_system = 0').run(name.trim(), id);
+}
+
+export function deleteNoteFolder(id: string): void {
+  const db = getDb();
+  ensureNoteTables(db);
+  db.prepare('DELETE FROM note_folders WHERE id = ? AND is_system = 0').run(id);
+}
+
+export function getNoteItems(folderId: string): NoteItem[] {
+  const db = getDb();
+  ensureNoteTables(db);
+  const rows = db.prepare('SELECT id, folder_id, zh, py, vn, pos, source_lesson_id, created_at FROM note_items WHERE folder_id = ? ORDER BY created_at DESC').all(folderId) as { id: string; folder_id: string; zh: string; py: string; vn: string; pos: string; source_lesson_id: string | null; created_at: string }[];
+  return rows.map(r => ({ id: r.id, folderId: r.folder_id, zh: r.zh, py: r.py, vn: r.vn, pos: r.pos, sourceLessonId: r.source_lesson_id, createdAt: r.created_at }));
+}
+
+export function addNoteItem(item: Omit<NoteItem, 'id' | 'createdAt'>): NoteItem {
+  const db = getDb();
+  ensureNoteTables(db);
+  const existing = db.prepare('SELECT id FROM note_items WHERE folder_id = ? AND zh = ?').get(item.folderId, item.zh);
+  if (existing) return getNoteItems(item.folderId).find(i => i.zh === item.zh)!;
+  const id = Math.random().toString(36).slice(2, 12);
+  const createdAt = new Date().toISOString();
+  db.prepare('INSERT INTO note_items (id, folder_id, zh, py, vn, pos, source_lesson_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+    id, item.folderId, item.zh, item.py, item.vn, item.pos, item.sourceLessonId ?? null, createdAt
+  );
+  return { ...item, id, createdAt };
+}
+
+export function deleteNoteItem(id: string): void {
+  const db = getDb();
+  ensureNoteTables(db);
+  db.prepare('DELETE FROM note_items WHERE id = ?').run(id);
+}
+
 export interface SearchResult {
   lessonId: string;
   lessonTitle: string;
@@ -262,10 +388,15 @@ export function getVocabByLevel(level: string): LevelVocabItem[] {
   return items;
 }
 
+function stripTones(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[üǖǘǚǜ]/g, 'v').toLowerCase();
+}
+
 export function searchVocab(query: string, limit = 40): SearchResult[] {
   const db = getDb();
   const rows = db.prepare('SELECT id, title, level, data FROM lessons').all() as { id: string; title: string; level: string; data: string }[];
   const q = query.toLowerCase().trim();
+  const qStripped = stripTones(q);
   const results: SearchResult[] = [];
   for (const row of rows) {
     try {
@@ -273,7 +404,7 @@ export function searchVocab(query: string, limit = 40): SearchResult[] {
       for (const v of (d.vocab ?? [])) {
         if (
           (v.zh && v.zh.includes(query)) ||
-          (v.py && v.py.toLowerCase().includes(q)) ||
+          (v.py && stripTones(v.py).includes(qStripped)) ||
           (v.vn && v.vn.toLowerCase().includes(q))
         ) {
           results.push({ lessonId: row.id, lessonTitle: row.title, level: row.level, zh: v.zh ?? '', py: v.py ?? '', vn: v.vn ?? '', pos: v.pos ?? '' });
