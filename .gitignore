@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# crawled lesson data (regenerate with: npm run crawl)
+/data/mandarin-bean-lessons.json
+/data/crawl-progress.json
