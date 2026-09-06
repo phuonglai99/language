@@ -12,9 +12,9 @@ export async function GET(
 
   const sentences = extractSentences(lesson.content).map(s => ({
     index: s.index,
+    hanzi: s.hanzi,   // needed for TTS per-sentence playback
     pinyin: s.pinyin,
     wordCount: s.wordCount,
-    // hanzi NOT included here — returned only via /check to prevent spoilers
   }));
 
   return NextResponse.json({

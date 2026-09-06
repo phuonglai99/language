@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import type { CharResult } from '@/lib/dictation';
 
-type DictationSentence = { index: number; pinyin: string; wordCount: number };
+type DictationSentence = { index: number; hanzi: string; pinyin: string; wordCount: number };
 type Lesson = {
   slug: string; title_en: string; title_zh_simplified: string;
   hsk_level: number; categories: string[]; audio_url: string | null;
@@ -73,10 +73,17 @@ export default function DictationExercisePage() {
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [difficulty, setDifficulty] = useState<'easy' | 'normal' | 'hard'>('normal');
+  const [ttsSupported, setTtsSupported] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const rightPanelRef = useRef<HTMLDivElement>(null);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  useEffect(() => {
+    setTtsSupported(typeof window !== 'undefined' && 'speechSynthesis' in window);
+    return () => { window.speechSynthesis?.cancel(); };
+  }, []);
 
   useEffect(() => {
     fetch(`/api/dictation/lessons/${slug}`)
@@ -90,6 +97,8 @@ export default function DictationExercisePage() {
   }, [playbackRate]);
 
   useEffect(() => {
+    window.speechSynthesis?.cancel();
+    setIsPlaying(false);
     setUserInput('');
     setShowHint(false);
     textareaRef.current?.focus();
@@ -121,17 +130,43 @@ export default function DictationExercisePage() {
     }
   }, [userInput, isChecking, slug, sentences, currentIndex]);
 
+  const speakSentence = useCallback((hanzi: string, rate = 1) => {
+    if (!ttsSupported) return;
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(hanzi);
+    utter.lang = 'zh-CN';
+    utter.rate = rate * 0.85; // SpeechSynthesis rate ≈ slightly slower than normal speech
+    utter.onstart = () => setIsPlaying(true);
+    utter.onend = () => setIsPlaying(false);
+    utter.onerror = () => setIsPlaying(false);
+    utteranceRef.current = utter;
+    window.speechSynthesis.speak(utter);
+  }, [ttsSupported]);
+
   const replayAudio = useCallback(() => {
-    if (!audioRef.current) return;
-    audioRef.current.currentTime = 0;
-    audioRef.current.play();
-  }, []);
+    const s = sentences[currentIndex];
+    if (s?.hanzi) {
+      speakSentence(s.hanzi, playbackRate);
+    } else if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play();
+    }
+  }, [sentences, currentIndex, speakSentence, playbackRate]);
 
   const togglePlay = useCallback(() => {
-    if (!audioRef.current) return;
-    if (audioRef.current.paused) { audioRef.current.play(); }
-    else { audioRef.current.pause(); }
-  }, []);
+    const s = sentences[currentIndex];
+    if (s?.hanzi) {
+      if (isPlaying) {
+        window.speechSynthesis.cancel();
+        setIsPlaying(false);
+      } else {
+        speakSentence(s.hanzi, playbackRate);
+      }
+    } else if (audioRef.current) {
+      if (audioRef.current.paused) { audioRef.current.play(); }
+      else { audioRef.current.pause(); }
+    }
+  }, [sentences, currentIndex, isPlaying, speakSentence, playbackRate]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -215,28 +250,19 @@ export default function DictationExercisePage() {
       {/* 3-column layout */}
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '280px 1fr 300px', maxWidth: 1280, margin: '0 auto', width: '100%', padding: '0 24px', gap: 20, boxSizing: 'border-box', minHeight: 0 }}>
 
-        {/* ── LEFT: Audio + Controls ───────────────────────────── */}
+        {/* ── LEFT: TTS Controls ──────────────────────────────── */}
         <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* TTS per-sentence */}
           <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
-            <div style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', marginBottom: 12, textTransform: 'uppercase' }}>Audio</div>
-            {lesson.audio_url ? (
-              <audio
-                ref={audioRef}
-                src={lesson.audio_url}
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
-                onEnded={() => setIsPlaying(false)}
-                style={{ width: '100%', height: 36 }}
-                controls
-              />
-            ) : (
-              <div style={{ color: 'var(--ash)', fontSize: 12, fontFamily: 'JetBrains Mono, monospace', padding: '8px 0', textAlign: 'center' }}>
-                🔇 Bài này chưa có audio
-              </div>
-            )}
-
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', textTransform: 'uppercase' }}>Nghe câu</span>
+              {ttsSupported && <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: '#16a34a' }}>TTS ✓</span>}
+            </div>
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--ash)', marginBottom: 10 }}>
+              Câu #{(currentSentence?.index ?? 0) + 1} — {currentSentence?.wordCount ?? 0} từ
+            </div>
             {/* Speed */}
-            <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
               {([0.75, 1] as const).map(rate => (
                 <button key={rate} onClick={() => setPlaybackRate(rate)} style={{
                   flex: 1, padding: '5px 0', borderRadius: 6,
@@ -250,7 +276,27 @@ export default function DictationExercisePage() {
                 </button>
               ))}
             </div>
+            {!ttsSupported && (
+              <div style={{ fontSize: 11, color: '#dc2626', fontFamily: 'JetBrains Mono, monospace', marginBottom: 8 }}>
+                Trình duyệt không hỗ trợ TTS
+              </div>
+            )}
           </div>
+
+          {/* Full lesson audio (supplementary) */}
+          {lesson.audio_url && (
+            <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
+              <div style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', marginBottom: 10, textTransform: 'uppercase' }}>
+                Audio gốc (cả bài)
+              </div>
+              <audio
+                ref={audioRef}
+                src={lesson.audio_url}
+                style={{ width: '100%', height: 36 }}
+                controls
+              />
+            </div>
+          )}
 
           {/* ĐIỀU KHIỂN */}
           <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
@@ -258,29 +304,32 @@ export default function DictationExercisePage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <button
                 onClick={togglePlay}
+                disabled={!ttsSupported}
                 style={{
                   padding: '10px 0', borderRadius: 8, border: 'none',
-                  background: isPlaying ? '#dc2626' : levelColor,
-                  color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                  background: !ttsSupported ? 'var(--border)' : isPlaying ? '#dc2626' : levelColor,
+                  color: '#fff', fontWeight: 700, fontSize: 13, cursor: ttsSupported ? 'pointer' : 'default',
                   fontFamily: 'Be Vietnam Pro, sans-serif',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   transition: 'background 0.15s',
                 }}
               >
-                {isPlaying ? '⏸ Dừng' : '▶ Bắt đầu'}
+                {isPlaying ? '⏸ Dừng' : '▶ Nghe câu này'}
               </button>
               <button
                 onClick={replayAudio}
+                disabled={!ttsSupported}
                 style={{
                   padding: '10px 0', borderRadius: 8,
                   border: '1px solid var(--border)', background: 'transparent',
-                  color: 'var(--ink)', fontWeight: 600, fontSize: 13, cursor: 'pointer',
+                  color: ttsSupported ? 'var(--ink)' : 'var(--border)', fontWeight: 600, fontSize: 13,
+                  cursor: ttsSupported ? 'pointer' : 'default',
                   fontFamily: 'Be Vietnam Pro, sans-serif',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   transition: 'all 0.15s',
                 }}
               >
-                ↺ Phát lại
+                ↺ Nghe lại (Tab)
               </button>
             </div>
           </div>
