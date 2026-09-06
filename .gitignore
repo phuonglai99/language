@@ -45,6 +45,10 @@ data/lessons.db
 *.db
 *.sqlite
 
+# crawled lesson data (regenerate with: npm run crawl)
+/data/mandarin-bean-lessons.json
+/data/crawl-progress.json
+
 # claude code session files
 .claude/
 CLAUDE.md

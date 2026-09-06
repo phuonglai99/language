@@ -60,3 +60,16 @@ body {
   font-family: 'Be Vietnam Pro', sans-serif;
   margin: 0;
 }
+
+/* Ruby annotation styling for Chinese reading lessons */
+ruby {
+  ruby-position: over;
+}
+
+rt {
+  font-size: 0.65em;
+  line-height: 1.4;
+  color: #9ca3af;
+  font-style: normal;
+  font-weight: 400;
+}
