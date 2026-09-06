@@ -6,12 +6,20 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "import:mb": "node scripts/import-mandarin-bean.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/multer": "^2.2.0",
+    "better-sqlite3": "^13.0.3",
+    "mammoth": "^1.12.2",
+    "multer": "^2.3.0",
     "next": "16.3.4",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
