@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 type LessonMeta = {
   id: string; title: string; subtitle?: string; level: string;
@@ -32,6 +33,7 @@ function lessonHref(section: string, id: string): string {
   if (section === 'grammar') return `/grammar/${id}`;
   if (section === 'quiz')    return `/lesson/${id}?mode=quiz`;
   if (section === 'game')    return `/lesson/${id}?mode=match`;
+  if (section === 'vocab')   return `/lesson/${id}?mode=list`;
   return `/lesson/${id}`;
 }
 
@@ -39,8 +41,26 @@ type MBLessonMeta = {
   slug: string; title_en: string; title_zh_simplified: string; hsk_level: number;
 };
 
+const SIDEBAR_W_DEFAULT = 272;
+const SIDEBAR_W_MIN = 200;
+const SIDEBAR_W_MAX = 400;
+
+function activeSection(pathname: string): string {
+  if (pathname.startsWith('/reading')) return 'reading';
+  if (pathname.startsWith('/grammar')) return 'grammar';
+  if (pathname.startsWith('/vocab')) return 'vocab';
+  if (pathname.startsWith('/lesson')) return 'vocab';
+  return '';
+}
+
 export default function GlobalShell() {
-  const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const currentSection = activeSection(pathname);
+  const [open, setOpen] = useState(true);
+  const [sidebarW, setSidebarW] = useState(SIDEBAR_W_DEFAULT);
+  const draggingRef = useRef(false);
+  const dragStartX = useRef(0);
+  const dragStartW = useRef(SIDEBAR_W_DEFAULT);
   const [lessons, setLessons] = useState<LessonMeta[]>([]);
   const [mbLessons, setMbLessons] = useState<MBLessonMeta[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ vocab: true });
@@ -50,11 +70,24 @@ export default function GlobalShell() {
   const [searching, setSearching] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const composingRef = useRef(false);
 
   useEffect(() => {
     fetch('/api/lessons').then(r => r.json()).then(d => setLessons(d.lessons ?? []));
     fetch('/api/reading').then(r => r.json()).then(d => setMbLessons(d.lessons ?? []));
   }, []);
+
+  useEffect(() => {
+    const main = document.getElementById('app-main');
+    if (main) main.style.paddingLeft = open ? `${sidebarW}px` : '52px';
+    document.body.style.setProperty('--sidebar-w', open ? `${sidebarW}px` : '52px');
+  }, [open, sidebarW]);
+
+  useEffect(() => {
+    if (currentSection) {
+      setExpanded(p => ({ ...p, [currentSection]: true }));
+    }
+  }, [currentSection]);
 
   const doSearch = useCallback((q: string) => {
     if (!q.trim()) { setSearchResults([]); setSearching(false); return; }
@@ -66,6 +99,7 @@ export default function GlobalShell() {
   }, []);
 
   useEffect(() => {
+    if (composingRef.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => doSearch(query), 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
@@ -82,60 +116,83 @@ export default function GlobalShell() {
   const toggleSub = (key: string) =>
     setSubExpanded(p => ({ ...p, [key]: !p[key] }));
 
-  const closeAll = () => { setOpen(false); setQuery(''); setSearchResults([]); };
+  const closeAll = () => { setQuery(''); setSearchResults([]); };
 
   return (
     <>
-      {/* Toggle button — always visible */}
-      <button
-        onClick={() => setOpen(o => !o)}
-        title="Menu"
-        style={{
-          position: 'fixed', bottom: 24, right: 20, zIndex: 200,
-          width: 42, height: 42, borderRadius: 12,
-          background: open ? 'var(--red)' : 'var(--sidebar-bg)',
-          border: '1px solid rgba(255,255,255,0.12)',
-          color: '#f5f1e8', cursor: 'pointer',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5,
-          transition: 'background 0.2s',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
-        }}
-      >
-        {open ? (
-          <span style={{ fontSize: 18, lineHeight: 1 }}>✕</span>
-        ) : (
-          <>
-            <span style={{ display: 'block', width: 18, height: 2, background: '#f5f1e8', borderRadius: 1 }} />
-            <span style={{ display: 'block', width: 18, height: 2, background: '#f5f1e8', borderRadius: 1 }} />
-            <span style={{ display: 'block', width: 18, height: 2, background: '#f5f1e8', borderRadius: 1 }} />
-          </>
-        )}
-      </button>
-
-      {/* Backdrop */}
-      {open && (
-        <div
-          onClick={closeAll}
-          style={{ position: 'fixed', inset: 0, zIndex: 149, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)' }}
-        />
+      {/* Mini rail — shown when sidebar is closed */}
+      {!open && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, bottom: 0, width: 52, zIndex: 200,
+          background: 'var(--sidebar-bg)',
+          borderRight: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          paddingTop: 12, gap: 16,
+        }}>
+          {/* Logo */}
+          <button onClick={() => setOpen(true)} title="Mở menu" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+            <img src="/icon.png" alt="ice-bear" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover', display: 'block' }} />
+          </button>
+          {/* Expand icon */}
+          <button
+            onClick={() => setOpen(true)}
+            title="Mở menu"
+            style={{
+              width: 32, height: 32, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)',
+              background: 'rgba(255,255,255,0.06)', color: 'rgba(200,191,176,0.6)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = '#f5f1e8'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(200,191,176,0.6)'; }}
+          >
+            ›
+          </button>
+          {/* Section icons */}
+          {SECTIONS.map(sec => (
+            <div key={sec.key} title={sec.label} style={{ width: 32, height: 32, borderRadius: 8, background: currentSection === sec.key ? sec.color + '44' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontFamily: 'Noto Serif SC, serif', color: currentSection === sec.key ? '#fff' : sec.color, cursor: 'pointer' }}
+              onClick={() => setOpen(true)}>
+              {sec.icon}
+            </div>
+          ))}
+          {/* Notes icon */}
+          <Link href="/notes" title="Ghi chú của tôi" style={{ width: 32, height: 32, borderRadius: 8, background: pathname.startsWith('/notes') ? '#e09d3a44' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, textDecoration: 'none' }}>
+            📝
+          </Link>
+        </div>
       )}
 
       {/* Sidebar */}
       <aside style={{
         position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 150,
-        width: 280, background: 'var(--sidebar-bg)',
+        width: sidebarW, background: 'var(--sidebar-bg)',
         borderRight: '1px solid rgba(255,255,255,0.08)',
         display: 'flex', flexDirection: 'column',
-        transform: open ? 'translateX(0)' : 'translateX(-100%)',
-        transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
-        overflowY: 'auto',
-        boxShadow: open ? '4px 0 32px rgba(0,0,0,0.35)' : 'none',
+        transform: open ? 'translateX(0)' : `translateX(-${sidebarW}px)`,
+        transition: draggingRef.current ? 'none' : 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
+        overflow: 'hidden',
+        boxShadow: open ? '4px 0 24px rgba(0,0,0,0.2)' : 'none',
       }}>
         {/* Sidebar header */}
-        <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+        <div style={{ padding: '14px 14px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 20, fontWeight: 700, color: '#f5f1e8' }}>汉语学习</span>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.15em', color: 'var(--red)', textTransform: 'uppercase' }}>HSK</span>
+            <Link href="/" onClick={closeAll} style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flex: 1 }}>
+              <img src="/icon.png" alt="ice-bear" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
+              <span style={{ fontFamily: 'Be Vietnam Pro, sans-serif', fontSize: 13, fontWeight: 700, color: '#f5f1e8', lineHeight: 1.2 }}>ice-bear is<br /><span style={{ color: 'var(--sidebar-text)', fontWeight: 400 }}>learning</span></span>
+            </Link>
+            {/* Collapse button */}
+            <button
+              onClick={closeAll}
+              title="Thu gọn"
+              style={{
+                width: 28, height: 28, borderRadius: 7, border: '1px solid rgba(255,255,255,0.1)',
+                background: 'rgba(255,255,255,0.06)', color: 'rgba(200,191,176,0.6)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = '#f5f1e8'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(200,191,176,0.6)'; }}
+            >
+              ‹
+            </button>
           </div>
 
           {/* Search bar */}
@@ -145,6 +202,8 @@ export default function GlobalShell() {
               ref={searchRef}
               value={query}
               onChange={e => setQuery(e.target.value)}
+              onCompositionStart={() => { composingRef.current = true; }}
+              onCompositionEnd={e => { composingRef.current = false; setQuery((e.target as HTMLInputElement).value); }}
               placeholder="Tìm từ vựng (pinyin, hán tự…)"
               style={{
                 width: '100%', boxSizing: 'border-box',
@@ -188,27 +247,31 @@ export default function GlobalShell() {
         </div>
 
         {/* Nav sections */}
-        <nav style={{ flex: 1, padding: '8px 0' }}>
-          {SECTIONS.map(sec => (
+        <nav style={{ flex: 1, padding: '8px 0', overflowY: 'auto' }}>
+          {SECTIONS.map(sec => {
+            const isActive = currentSection === sec.key;
+            return (
             <div key={sec.key}>
               {/* Section header */}
               <button
                 onClick={() => toggleSection(sec.key)}
                 style={{
-                  width: '100%', padding: '10px 16px', background: 'none', border: 'none',
+                  width: '100%', padding: '10px 16px', border: 'none',
+                  background: isActive ? 'rgba(255,255,255,0.08)' : 'none',
+                  borderLeft: isActive ? `3px solid ${sec.color}` : '3px solid transparent',
                   display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
-                  color: '#f5f1e8', fontSize: 13, fontWeight: 600,
+                  color: isActive ? '#fff' : '#f5f1e8', fontSize: 13, fontWeight: isActive ? 700 : 600,
                   fontFamily: 'Be Vietnam Pro, sans-serif',
                   transition: 'background 0.15s',
                 }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'none'; }}
               >
-                <span style={{ width: 26, height: 26, borderRadius: 6, background: sec.color + '33', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: sec.icon.length > 1 ? 13 : 14, fontFamily: 'Noto Serif SC, serif', color: sec.color, flexShrink: 0 }}>
+                <span style={{ width: 26, height: 26, borderRadius: 6, background: isActive ? sec.color + '55' : sec.color + '33', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: sec.icon.length > 1 ? 13 : 14, fontFamily: 'Noto Serif SC, serif', color: isActive ? '#fff' : sec.color, flexShrink: 0 }}>
                   {sec.icon}
                 </span>
                 <span style={{ flex: 1, textAlign: 'left' }}>{sec.label}</span>
-                <span style={{ fontSize: 10, color: 'rgba(200,191,176,0.4)', transition: 'transform 0.2s', transform: expanded[sec.key] ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+                <span style={{ fontSize: 10, color: isActive ? 'rgba(255,255,255,0.5)' : 'rgba(200,191,176,0.4)', transition: 'transform 0.2s', transform: expanded[sec.key] ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
               </button>
 
               {/* Section content */}
@@ -262,6 +325,7 @@ export default function GlobalShell() {
                               key={l.id}
                               href={lessonHref(sec.key, l.id)}
                               onClick={closeAll}
+                              title={l.title}
                               style={{ display: 'flex', alignItems: 'center', padding: '5px 14px 5px 66px', textDecoration: 'none', color: 'rgba(200,191,176,0.8)', fontSize: 12, transition: 'background 0.1s, color 0.1s' }}
                               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#f5f1e8'; }}
                               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(200,191,176,0.8)'; }}
@@ -274,40 +338,53 @@ export default function GlobalShell() {
                       );
                     })
                   ) : (
-                    // Other sections: flat list grouped by HSK level
+                    // Other sections (vocab, quiz, game): collapsible HSK sub-folders
                     HSK_LEVELS.map(lvl => {
                       const grp = grouped[lvl] ?? [];
                       if (grp.length === 0) return null;
                       const lvlColor = LEVEL_COLOR[lvl] ?? 'var(--ash-light)';
+                      const subKey = `${sec.key}-${lvl}`;
+                      const isSubOpen = subExpanded[subKey] ?? false;
+                      const count = sec.key === 'vocab'
+                        ? `${grp.reduce((s, l) => s + l.vocabCount, 0)} từ`
+                        : `${grp.length}`;
                       return (
-                        <div key={lvl} style={{ marginBottom: 2 }}>
-                          {/* HSK level header — for vocab section it's a link to the level vocab page */}
-                          {sec.key === 'vocab' ? (
-                            <Link href={`/vocab/${lvl}`} onClick={closeAll}
-                              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 16px 4px 52px', textDecoration: 'none', transition: 'background 0.1s' }}
-                              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
-                              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                            >
-                              <span style={{ fontSize: 9.5, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.12em', color: lvlColor, textTransform: 'uppercase', fontWeight: 700 }}>{lvl}</span>
-                              <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: 'rgba(200,191,176,0.3)', marginLeft: 'auto' }}>{grp.reduce((s, l) => s + l.vocabCount, 0)} từ →</span>
-                            </Link>
-                          ) : (
-                            <div style={{ padding: '4px 16px 4px 52px', fontSize: 9.5, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.12em', color: lvlColor, textTransform: 'uppercase', fontWeight: 700 }}>
-                              {lvl}
-                            </div>
+                        <div key={lvl}>
+                          <button
+                            onClick={() => toggleSub(subKey)}
+                            style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, padding: '4px 16px 4px 46px', color: lvlColor }}
+                          >
+                            <span style={{ fontSize: 9, transition: 'transform 0.15s', transform: isSubOpen ? 'rotate(90deg)' : 'rotate(0deg)', display: 'inline-block' }}>▶</span>
+                            <span style={{ fontSize: 9.5, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700 }}>{lvl}</span>
+                            <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: 'rgba(200,191,176,0.3)', marginLeft: 'auto' }}>{count}</span>
+                          </button>
+                          {isSubOpen && (
+                            <>
+                              {sec.key === 'vocab' && (
+                                <Link href={`/vocab/${lvl}`} onClick={closeAll}
+                                  style={{ display: 'flex', alignItems: 'center', padding: '4px 14px 4px 66px', textDecoration: 'none', color: lvlColor, fontSize: 11, fontFamily: 'JetBrains Mono, monospace', transition: 'background 0.1s' }}
+                                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
+                                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                                  <span style={{ fontSize: 9, color: 'rgba(200,191,176,0.25)', marginRight: 6, flexShrink: 0 }}>└</span>
+                                  Tất cả từ vựng →
+                                </Link>
+                              )}
+                              {grp.map(l => (
+                                <Link
+                                  key={l.id}
+                                  href={lessonHref(sec.key, l.id)}
+                                  onClick={closeAll}
+                                  title={l.title}
+                                  style={{ display: 'flex', alignItems: 'center', padding: '5px 14px 5px 66px', textDecoration: 'none', color: 'rgba(200,191,176,0.8)', fontSize: 12, transition: 'background 0.1s, color 0.1s' }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#f5f1e8'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(200,191,176,0.8)'; }}
+                                >
+                                  <span style={{ fontSize: 9, color: 'rgba(200,191,176,0.25)', marginRight: 6, flexShrink: 0 }}>└</span>
+                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title}</span>
+                                </Link>
+                              ))}
+                            </>
                           )}
-                          {grp.map(l => (
-                            <Link
-                              key={l.id}
-                              href={lessonHref(sec.key, l.id)}
-                              onClick={closeAll}
-                              style={{ display: 'flex', alignItems: 'center', padding: '5px 14px 5px 52px', textDecoration: 'none', color: 'rgba(200,191,176,0.8)', fontSize: 12, transition: 'background 0.1s, color 0.1s' }}
-                              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#f5f1e8'; }}
-                              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(200,191,176,0.8)'; }}
-                            >
-                              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title}</span>
-                            </Link>
-                          ))}
                         </div>
                       );
                     })
@@ -317,11 +394,57 @@ export default function GlobalShell() {
 
               <div style={{ height: 1, background: 'rgba(255,255,255,0.05)', margin: '2px 16px' }} />
             </div>
-          ))}
+            );
+          })}
+          {/* Notes link — after game section */}
+          <Link href="/notes" onClick={closeAll}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
+              textDecoration: 'none', border: 'none',
+              background: pathname.startsWith('/notes') ? 'rgba(255,255,255,0.08)' : 'none',
+              borderLeft: `3px solid ${pathname.startsWith('/notes') ? '#e09d3a' : 'transparent'}`,
+              color: pathname.startsWith('/notes') ? '#fff' : '#f5f1e8',
+              fontSize: 13, fontWeight: pathname.startsWith('/notes') ? 700 : 600,
+              fontFamily: 'Be Vietnam Pro, sans-serif',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={e => { if (!pathname.startsWith('/notes')) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+            onMouseLeave={e => { if (!pathname.startsWith('/notes')) e.currentTarget.style.background = 'none'; }}>
+            <span style={{ width: 26, height: 26, borderRadius: 6, background: pathname.startsWith('/notes') ? '#e09d3a55' : '#e09d3a33', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>📝</span>
+            <span>Ghi chú của tôi</span>
+          </Link>
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.05)', margin: '2px 16px' }} />
         </nav>
 
-        {/* Footer link to home */}
-        <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+        {/* Resize handle */}
+        <div
+          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 5, cursor: 'col-resize', zIndex: 10 }}
+          onMouseDown={e => {
+            draggingRef.current = true;
+            dragStartX.current = e.clientX;
+            dragStartW.current = sidebarW;
+            const onMove = (ev: MouseEvent) => {
+              const next = Math.min(SIDEBAR_W_MAX, Math.max(SIDEBAR_W_MIN, dragStartW.current + ev.clientX - dragStartX.current));
+              setSidebarW(next);
+            };
+            const onUp = () => {
+              draggingRef.current = false;
+              document.removeEventListener('mousemove', onMove);
+              document.removeEventListener('mouseup', onUp);
+              document.body.style.cursor = '';
+              document.body.style.userSelect = '';
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.15)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        />
+
+        {/* Footer links */}
+        <div style={{ padding: '10px 16px', borderTop: '1px solid rgba(255,255,255,0.08)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
           <Link href="/" onClick={closeAll} style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'rgba(200,191,176,0.6)', fontSize: 12, transition: 'color 0.15s' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#f5f1e8')}
             onMouseLeave={e => (e.currentTarget.style.color = 'rgba(200,191,176,0.6)')}>

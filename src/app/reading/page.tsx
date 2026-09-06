@@ -20,9 +20,9 @@ const HSK_LEVELS = [1, 2, 3, 4, 5];
 function CategoryBadge({ cat }: { cat: string }) {
   return (
     <span style={{
-      display: 'inline-block', padding: '1px 6px', borderRadius: 4,
-      background: 'var(--paper-alt)', border: '1px solid var(--border)',
-      fontSize: 9.5, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace',
+      display: 'inline-block', padding: '2px 8px', borderRadius: 20,
+      background: '#f3f4f6',
+      fontSize: 9.5, color: '#6b7280', fontFamily: 'JetBrains Mono, monospace',
       letterSpacing: '0.06em', whiteSpace: 'nowrap',
     }}>
       {cat}
@@ -68,13 +68,16 @@ function ReadingPageInner() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--paper)' }}>
+    <div style={{ minHeight: '100vh', background: 'transparent' }}>
       {/* Header */}
-      <header style={{ background: 'var(--sidebar-bg)', borderBottom: '1px solid rgba(255,255,255,0.07)', position: 'sticky', top: 0, zIndex: 50 }}>
-        <div style={{ maxWidth: 1080, margin: '0 auto', padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+      <header style={{ background: '#1e3a8a', position: 'sticky', top: 0, zIndex: 50, boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>
+        <div style={{ maxWidth: 1080, margin: '0 auto', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 20, fontWeight: 700, color: '#f5f1e8' }}>读课文</span>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.18em', color: 'var(--red)', textTransform: 'uppercase' }}>Đọc bài khoá</span>
+            <Link href="/" style={{ textDecoration: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 13, marginRight: 4, transition: 'color 0.15s' }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}>← </Link>
+            <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 20, fontWeight: 700, color: '#fff' }}>读课文</span>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>Đọc bài khoá</span>
           </div>
           {/* Search */}
           <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
@@ -145,18 +148,19 @@ function ReadingPageInner() {
               >
                 <div
                   style={{
-                    background: 'var(--card-bg)', border: '1px solid var(--border)',
-                    borderRadius: 12, overflow: 'hidden',
-                    transition: 'border-color 0.15s, box-shadow 0.15s',
+                    background: '#fff',
+                    borderRadius: 14, overflow: 'hidden',
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
+                    transition: 'box-shadow 0.15s, transform 0.15s',
                     height: '100%', display: 'flex', flexDirection: 'column',
                   }}
                   onMouseEnter={e => {
-                    (e.currentTarget as HTMLDivElement).style.borderColor = LEVEL_COLOR[l.hsk_level] ?? 'var(--ash)';
-                    (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 20px rgba(0,0,0,0.08)';
+                    (e.currentTarget as HTMLDivElement).style.boxShadow = '0 6px 24px rgba(0,0,0,0.11)';
+                    (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
                   }}
                   onMouseLeave={e => {
-                    (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)';
-                    (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
+                    (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 10px rgba(0,0,0,0.06)';
+                    (e.currentTarget as HTMLDivElement).style.transform = 'none';
                   }}
                 >
                   {/* Color bar */}
@@ -166,9 +170,9 @@ function ReadingPageInner() {
                     {/* Level + audio */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span style={{
-                        display: 'inline-block', padding: '2px 8px', borderRadius: 4,
-                        background: LEVEL_COLOR[l.hsk_level] ?? 'var(--ash)',
-                        color: 'white', fontSize: 9.5, fontWeight: 700,
+                        display: 'inline-block', padding: '3px 10px', borderRadius: 20,
+                        background: (LEVEL_COLOR[l.hsk_level] ?? '#888') + '18',
+                        color: LEVEL_COLOR[l.hsk_level] ?? '#888', fontSize: 11, fontWeight: 700,
                         fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em',
                       }}>
                         HSK {l.hsk_level}
@@ -179,17 +183,17 @@ function ReadingPageInner() {
                     </div>
 
                     {/* Chinese title */}
-                    <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 18, fontWeight: 700, color: 'var(--ink)', lineHeight: 1.3 }}>
+                    <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 18, fontWeight: 700, color: '#111827', lineHeight: 1.3 }}>
                       {l.title_zh_simplified}
                     </div>
 
                     {/* English title */}
-                    <div style={{ fontSize: 12, color: 'var(--ash)', lineHeight: 1.4, flex: 1 }}>
+                    <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.4, flex: 1 }}>
                       {l.title_en}
                     </div>
 
                     {/* Categories */}
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4, paddingBottom: 4 }}>
                       {l.categories.slice(0, 3).map(cat => <CategoryBadge key={cat} cat={cat} />)}
                     </div>
                   </div>
