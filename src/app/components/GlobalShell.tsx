@@ -239,7 +239,14 @@ export default function GlobalShell() {
                       })}
                     </div>
                   ) : sec.key === 'listen' ? (
-                    <div style={{ padding: '6px 16px 8px 52px', fontSize: 12, color: 'rgba(200,191,176,0.4)', fontStyle: 'italic' }}>Sắp ra mắt…</div>
+                    <div style={{ padding: '4px 16px 8px 52px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <Link href="/dictation" onClick={() => setOpen(false)} style={{ textDecoration: 'none', padding: '5px 8px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8, transition: 'background 0.15s' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                        <span style={{ fontSize: 11, color: 'rgba(200,191,176,0.5)' }}>🎙</span>
+                        <span style={{ fontSize: 12, color: 'rgba(200,191,176,0.75)', fontFamily: 'Be Vietnam Pro, sans-serif' }}>Chép chính tả Tiếng Trung</span>
+                      </Link>
+                    </div>
                   ) : sec.key === 'grammar' ? (
                     // Grammar: collapsible HSK sub-folders
                     HSK_LEVELS.map(lvl => {
