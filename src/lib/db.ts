@@ -157,6 +157,12 @@ export interface MBLessonWord {
   wordId?: string | null;
 }
 
+export interface SentenceTimestamp {
+  index: number;
+  start: number | null;
+  end: number | null;
+}
+
 export interface MBLesson {
   slug: string;
   url: string;
@@ -168,6 +174,7 @@ export interface MBLesson {
   audio_url: string | null;
   content: MBLessonWord[][];
   content_text: string;
+  sentence_timestamps?: SentenceTimestamp[] | null;
 }
 
 function ensureMBTable(db: Database.Database) {
@@ -182,19 +189,31 @@ function ensureMBTable(db: Database.Database) {
       categories TEXT NOT NULL,
       audio_url TEXT,
       content TEXT NOT NULL,
-      content_text TEXT NOT NULL
+      content_text TEXT NOT NULL,
+      sentence_timestamps TEXT
     );
     CREATE INDEX IF NOT EXISTS mb_lessons_hsk ON mb_lessons(hsk_level);
   `);
+  try { db.exec('ALTER TABLE mb_lessons ADD COLUMN sentence_timestamps TEXT'); } catch { /* already exists */ }
 }
 
 export function saveMBLesson(lesson: MBLesson): void {
   const db = getDb();
   ensureMBTable(db);
   db.prepare(`
-    INSERT OR REPLACE INTO mb_lessons
+    INSERT INTO mb_lessons
       (slug, url, title_en, title_zh_simplified, title_zh_traditional, hsk_level, categories, audio_url, content, content_text)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(slug) DO UPDATE SET
+      url=excluded.url,
+      title_en=excluded.title_en,
+      title_zh_simplified=excluded.title_zh_simplified,
+      title_zh_traditional=excluded.title_zh_traditional,
+      hsk_level=excluded.hsk_level,
+      categories=excluded.categories,
+      audio_url=excluded.audio_url,
+      content=excluded.content,
+      content_text=excluded.content_text
   `).run(
     lesson.slug, lesson.url, lesson.title_en,
     lesson.title_zh_simplified, lesson.title_zh_traditional,
@@ -209,10 +228,15 @@ export function getMBLesson(slug: string): MBLesson | null {
   ensureMBTable(db);
   const row = db.prepare('SELECT * FROM mb_lessons WHERE slug = ?').get(slug) as Record<string, unknown> | undefined;
   if (!row) return null;
+  let sentence_timestamps: SentenceTimestamp[] | null = null;
+  if (typeof row.sentence_timestamps === 'string' && row.sentence_timestamps) {
+    try { sentence_timestamps = JSON.parse(row.sentence_timestamps); } catch { /* ignore */ }
+  }
   return {
-    ...(row as Omit<MBLesson, 'categories' | 'content'>),
+    ...(row as Omit<MBLesson, 'categories' | 'content' | 'sentence_timestamps'>),
     categories: JSON.parse(row.categories as string),
     content: JSON.parse(row.content as string),
+    sentence_timestamps,
   };
 }
 

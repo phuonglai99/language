@@ -49,15 +49,28 @@ db.exec(`
     categories TEXT NOT NULL,
     audio_url TEXT,
     content TEXT NOT NULL,
-    content_text TEXT NOT NULL
+    content_text TEXT NOT NULL,
+    sentence_timestamps TEXT
   );
   CREATE INDEX IF NOT EXISTS mb_lessons_hsk ON mb_lessons(hsk_level);
 `);
 
+try { db.exec('ALTER TABLE mb_lessons ADD COLUMN sentence_timestamps TEXT'); } catch { /* already exists */ }
+
 const insert = db.prepare(`
-  INSERT OR REPLACE INTO mb_lessons
+  INSERT INTO mb_lessons
     (slug, url, title_en, title_zh_simplified, title_zh_traditional, hsk_level, categories, audio_url, content, content_text)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(slug) DO UPDATE SET
+    url=excluded.url,
+    title_en=excluded.title_en,
+    title_zh_simplified=excluded.title_zh_simplified,
+    title_zh_traditional=excluded.title_zh_traditional,
+    hsk_level=excluded.hsk_level,
+    categories=excluded.categories,
+    audio_url=excluded.audio_url,
+    content=excluded.content,
+    content_text=excluded.content_text
 `);
 
 const insertMany = db.transaction((rows) => {

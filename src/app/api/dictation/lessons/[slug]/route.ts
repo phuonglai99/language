@@ -10,12 +10,20 @@ export async function GET(
   const lesson = getMBLesson(slug);
   if (!lesson) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const sentences = extractSentences(lesson.content).map(s => ({
-    index: s.index,
-    hanzi: s.hanzi,   // needed for TTS per-sentence playback
-    pinyin: s.pinyin,
-    wordCount: s.wordCount,
-  }));
+  const tsByIndex = new Map(
+    (lesson.sentence_timestamps ?? []).map(t => [t.index, t]),
+  );
+  const sentences = extractSentences(lesson.content).map(s => {
+    const t = tsByIndex.get(s.index);
+    return {
+      index: s.index,
+      hanzi: s.hanzi,   // needed for TTS fallback when not yet aligned
+      pinyin: s.pinyin,
+      wordCount: s.wordCount,
+      start: t?.start ?? null,
+      end: t?.end ?? null,
+    };
+  });
 
   return NextResponse.json({
     lesson: {

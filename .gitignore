@@ -49,7 +49,14 @@ data/lessons.db
 /data/mandarin-bean-lessons.json
 /data/crawl-progress.json
 
+# whisper alignment venv + caches
+/scripts/venv/
+/scripts/__pycache__/
+*.pyc
+/data/align-whisper.log
+
 # claude code session files
 .claude/
 CLAUDE.md
 AGENTS.md
+DEPLOY_SQLITE_VPS.md

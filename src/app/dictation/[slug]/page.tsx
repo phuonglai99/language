@@ -4,7 +4,10 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import type { CharResult } from '@/lib/dictation';
 
-type DictationSentence = { index: number; hanzi: string; pinyin: string; wordCount: number };
+type DictationSentence = {
+  index: number; hanzi: string; pinyin: string; wordCount: number;
+  start: number | null; end: number | null;
+};
 type Lesson = {
   slug: string; title_en: string; title_zh_simplified: string;
   hsk_level: number; categories: string[]; audio_url: string | null;
@@ -79,10 +82,29 @@ export default function DictationExercisePage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const rightPanelRef = useRef<HTMLDivElement>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const stopHandlerRef = useRef<(() => void) | null>(null);
+
+  const hasAlignedAudio = (s?: DictationSentence) =>
+    s != null && s.start != null && s.end != null;
+
+  const clearAudioStop = () => {
+    const audio = audioRef.current;
+    if (audio && stopHandlerRef.current) {
+      audio.removeEventListener('timeupdate', stopHandlerRef.current);
+      stopHandlerRef.current = null;
+    }
+  };
 
   useEffect(() => {
     setTtsSupported(typeof window !== 'undefined' && 'speechSynthesis' in window);
-    return () => { window.speechSynthesis?.cancel(); };
+    return () => {
+      window.speechSynthesis?.cancel();
+      const audio = audioRef.current;
+      if (audio && stopHandlerRef.current) {
+        audio.removeEventListener('timeupdate', stopHandlerRef.current);
+        stopHandlerRef.current = null;
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -98,6 +120,8 @@ export default function DictationExercisePage() {
 
   useEffect(() => {
     window.speechSynthesis?.cancel();
+    clearAudioStop();
+    if (audioRef.current && !audioRef.current.paused) audioRef.current.pause();
     setIsPlaying(false);
     setUserInput('');
     setShowHint(false);
@@ -143,19 +167,67 @@ export default function DictationExercisePage() {
     window.speechSynthesis.speak(utter);
   }, [ttsSupported]);
 
+  const playSentence = useCallback((start: number, end: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    clearAudioStop();
+    window.speechSynthesis?.cancel();
+
+    const stopAt = end + 0.15;
+    const stop = () => {
+      if (audio.currentTime >= stopAt) {
+        audio.pause();
+        audio.removeEventListener('timeupdate', stop);
+        stopHandlerRef.current = null;
+        setIsPlaying(false);
+      }
+    };
+    stopHandlerRef.current = stop;
+    audio.addEventListener('timeupdate', stop);
+
+    const startPlay = () => {
+      audio.currentTime = start;
+      audio.playbackRate = playbackRate;
+      audio.play()
+        .then(() => setIsPlaying(true))
+        .catch(() => setIsPlaying(false));
+    };
+
+    if (audio.readyState >= 1) {
+      startPlay();
+    } else {
+      const onReady = () => {
+        audio.removeEventListener('loadedmetadata', onReady);
+        startPlay();
+      };
+      audio.addEventListener('loadedmetadata', onReady);
+      audio.load();
+    }
+  }, [playbackRate]);
+
   const replayAudio = useCallback(() => {
     const s = sentences[currentIndex];
-    if (s?.hanzi) {
+    if (hasAlignedAudio(s)) {
+      playSentence(s.start as number, s.end as number);
+    } else if (s?.hanzi) {
       speakSentence(s.hanzi, playbackRate);
     } else if (audioRef.current) {
       audioRef.current.currentTime = 0;
       audioRef.current.play();
     }
-  }, [sentences, currentIndex, speakSentence, playbackRate]);
+  }, [sentences, currentIndex, playSentence, speakSentence, playbackRate]);
 
   const togglePlay = useCallback(() => {
     const s = sentences[currentIndex];
-    if (s?.hanzi) {
+    if (hasAlignedAudio(s)) {
+      if (isPlaying) {
+        clearAudioStop();
+        audioRef.current?.pause();
+        setIsPlaying(false);
+      } else {
+        playSentence(s.start as number, s.end as number);
+      }
+    } else if (s?.hanzi) {
       if (isPlaying) {
         window.speechSynthesis.cancel();
         setIsPlaying(false);
@@ -166,7 +238,7 @@ export default function DictationExercisePage() {
       if (audioRef.current.paused) { audioRef.current.play(); }
       else { audioRef.current.pause(); }
     }
-  }, [sentences, currentIndex, isPlaying, speakSentence, playbackRate]);
+  }, [sentences, currentIndex, isPlaying, playSentence, speakSentence, playbackRate]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -223,6 +295,7 @@ export default function DictationExercisePage() {
   const levelColor = LEVEL_COLOR[lesson.hsk_level] ?? 'var(--ash)';
   const currentSentence = sentences[currentIndex];
   const currentResult = results[currentIndex];
+  const canPlaySentence = hasAlignedAudio(currentSentence) || ttsSupported;
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--paper)', display: 'flex', flexDirection: 'column' }}>
@@ -252,11 +325,15 @@ export default function DictationExercisePage() {
 
         {/* ── LEFT: TTS Controls ──────────────────────────────── */}
         <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* TTS per-sentence */}
+          {/* Per-sentence playback */}
           <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <span style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', textTransform: 'uppercase' }}>Nghe câu</span>
-              {ttsSupported && <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: '#16a34a' }}>TTS ✓</span>}
+              {hasAlignedAudio(currentSentence) ? (
+                <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: '#16a34a' }}>Audio ✓</span>
+              ) : ttsSupported ? (
+                <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: '#16a34a' }}>TTS ✓</span>
+              ) : null}
             </div>
             <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--ash)', marginBottom: 10 }}>
               Câu #{(currentSentence?.index ?? 0) + 1} — {currentSentence?.wordCount ?? 0} từ
@@ -276,7 +353,7 @@ export default function DictationExercisePage() {
                 </button>
               ))}
             </div>
-            {!ttsSupported && (
+            {!hasAlignedAudio(currentSentence) && !ttsSupported && (
               <div style={{ fontSize: 11, color: '#dc2626', fontFamily: 'JetBrains Mono, monospace', marginBottom: 8 }}>
                 Trình duyệt không hỗ trợ TTS
               </div>
@@ -294,6 +371,10 @@ export default function DictationExercisePage() {
                 src={lesson.audio_url}
                 style={{ width: '100%', height: 36 }}
                 controls
+                onEnded={() => {
+                  clearAudioStop();
+                  setIsPlaying(false);
+                }}
               />
             </div>
           )}
@@ -304,11 +385,11 @@ export default function DictationExercisePage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <button
                 onClick={togglePlay}
-                disabled={!ttsSupported}
+                disabled={!canPlaySentence}
                 style={{
                   padding: '10px 0', borderRadius: 8, border: 'none',
-                  background: !ttsSupported ? 'var(--border)' : isPlaying ? '#dc2626' : levelColor,
-                  color: '#fff', fontWeight: 700, fontSize: 13, cursor: ttsSupported ? 'pointer' : 'default',
+                  background: !canPlaySentence ? 'var(--border)' : isPlaying ? '#dc2626' : levelColor,
+                  color: '#fff', fontWeight: 700, fontSize: 13, cursor: canPlaySentence ? 'pointer' : 'default',
                   fontFamily: 'Be Vietnam Pro, sans-serif',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   transition: 'background 0.15s',
@@ -318,12 +399,12 @@ export default function DictationExercisePage() {
               </button>
               <button
                 onClick={replayAudio}
-                disabled={!ttsSupported}
+                disabled={!canPlaySentence}
                 style={{
                   padding: '10px 0', borderRadius: 8,
                   border: '1px solid var(--border)', background: 'transparent',
-                  color: ttsSupported ? 'var(--ink)' : 'var(--border)', fontWeight: 600, fontSize: 13,
-                  cursor: ttsSupported ? 'pointer' : 'default',
+                  color: canPlaySentence ? 'var(--ink)' : 'var(--border)', fontWeight: 600, fontSize: 13,
+                  cursor: canPlaySentence ? 'pointer' : 'default',
                   fontFamily: 'Be Vietnam Pro, sans-serif',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   transition: 'all 0.15s',
