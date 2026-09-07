@@ -14,6 +14,71 @@ const OUTPUT_FILE = path.join(OUTPUT_DIR, 'mandarin-bean-lessons.json');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+function absoluteUrl(value, baseUrl) {
+  if (!value) return null;
+  try {
+    return new URL(value, baseUrl).href;
+  } catch {
+    return value;
+  }
+}
+
+function extractAudioUrl($, pageUrl) {
+  const directAudioUrl =
+    $('audio').attr('src') ||
+    $('audio').attr('data-mb-audio-src') ||
+    $('audio source').attr('src') ||
+    $('audio source').attr('data-src') ||
+    $('[class*="audio"]').attr('src') ||
+    $('[class*="audio"]').attr('data-src') ||
+    $('[class*="audio"]').attr('data-mb-audio-src');
+
+  if (directAudioUrl) return absoluteUrl(directAudioUrl, pageUrl);
+
+  const downloadUrl =
+    $('a[download][href*="audio"]').attr('href') ||
+    $('a[href*="download.mandarinbean.com/audio"]').attr('href');
+  if (!downloadUrl) return null;
+
+  const resolvedDownloadUrl = absoluteUrl(downloadUrl, pageUrl);
+  try {
+    const source = new URL(resolvedDownloadUrl).searchParams.get('source');
+    return source ? Buffer.from(source, 'base64').toString('utf8') : resolvedDownloadUrl;
+  } catch {
+    return resolvedDownloadUrl;
+  }
+}
+
+function pushTextToken(paragraph, text) {
+  const hanzi = (text || '').replace(/\s+/g, '');
+  if (!hanzi) return;
+  paragraph.push({ hanzi, pinyin: '', hsk: null, definition: null, wordId: null });
+}
+
+function pushRubyToken($, paragraph, rubyEl) {
+  const hanzi = $(rubyEl).find('.si').text().trim() || $(rubyEl).find('span').first().text().trim();
+  const pinyin = $(rubyEl).attr('data-mb-pinyin') || $(rubyEl).find('rt').text().trim();
+  const hsk = $(rubyEl).attr('data-mb-newhsk') ? parseInt($(rubyEl).attr('data-mb-newhsk')) : null;
+  const definition = $(rubyEl).attr('data-mb-definition') || null;
+  const wordId = $(rubyEl).attr('data-mb-word-id') || null;
+  if (hanzi) paragraph.push({ hanzi, pinyin, hsk, definition, wordId });
+}
+
+function appendContentNode($, paragraph, node) {
+  if (node.type === 'text') {
+    pushTextToken(paragraph, node.data);
+    return;
+  }
+
+  if (node.type !== 'tag') return;
+  if (node.name === 'ruby') {
+    pushRubyToken($, paragraph, node);
+    return;
+  }
+
+  $(node).contents().each((_, child) => appendContentNode($, paragraph, child));
+}
+
 async function fetchPage(url, retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -133,13 +198,9 @@ async function parseLessonPage(url) {
   });
 
   // Audio URL
-  const audioUrl =
-    $('audio').attr('src') ||
-    $('audio source').attr('src') ||
-    $('[class*="audio"]').attr('src') ||
-    null;
+  const audioUrl = extractAudioUrl($, url);
 
-  // Content: ruby elements inside a single <p>, separated by <br> for paragraph breaks
+  // Content: ruby elements plus text punctuation/numbers, separated by <br> for paragraph breaks
   const contentParagraphs = [];
 
   // Find the <p> element(s) containing ruby elements
@@ -156,14 +217,8 @@ async function parseLessonPage(url) {
           contentParagraphs.push(currentParagraph);
           currentParagraph = [];
         }
-      } else if (node.type === 'tag' && node.name === 'ruby') {
-        const rubyEl = node;
-        const hanzi = $(rubyEl).find('.si').text().trim() || $(rubyEl).find('span').first().text().trim();
-        const pinyin = $(rubyEl).attr('data-mb-pinyin') || $(rubyEl).find('rt').text().trim();
-        const hsk = $(rubyEl).attr('data-mb-newhsk') ? parseInt($(rubyEl).attr('data-mb-newhsk')) : null;
-        const definition = $(rubyEl).attr('data-mb-definition') || null;
-        const wordId = $(rubyEl).attr('data-mb-word-id') || null;
-        if (hanzi) currentParagraph.push({ hanzi, pinyin, hsk, definition, wordId });
+      } else {
+        appendContentNode($, currentParagraph, node);
       }
     });
     if (currentParagraph.length > 0) contentParagraphs.push(currentParagraph);

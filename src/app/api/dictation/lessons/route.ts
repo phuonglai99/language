@@ -5,8 +5,15 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const hsk = searchParams.get('hsk_level') ?? searchParams.get('hsk');
   const q = searchParams.get('q')?.toLowerCase() ?? '';
+  const status = searchParams.get('status')?.toLowerCase() ?? '';
 
   let lessons = hsk ? getMBLessonsByHsk(Number(hsk)) : getAllMBLessons();
+
+  if (status === 'checked') {
+    lessons = lessons.filter(l => l.categories.includes('Checked'));
+  } else if (status === 'uncheck' || status === 'unchecked') {
+    lessons = lessons.filter(l => l.categories.includes('Uncheck'));
+  }
 
   if (q) {
     lessons = lessons.filter(

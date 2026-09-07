@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMBLesson } from '@/lib/db';
-import { extractSentences, diffHanzi, cleanHanzi } from '@/lib/dictation';
+import { extractSentences, isDictationPerfect, matchDictationWords } from '@/lib/dictation';
 
 export async function POST(req: NextRequest) {
   const body = await req.json() as { slug: string; sentence_index: number; user_input: string };
@@ -17,8 +17,8 @@ export async function POST(req: NextRequest) {
   const sentence = sentences.find(s => s.index === sentence_index);
   if (!sentence) return NextResponse.json({ error: 'Sentence not found' }, { status: 404 });
 
-  const result = diffHanzi(user_input, sentence.hanzi);
-  const is_perfect = cleanHanzi(user_input) === cleanHanzi(sentence.hanzi);
+  const result = matchDictationWords(user_input, sentence.words);
+  const is_perfect = isDictationPerfect(result);
 
   return NextResponse.json({
     result,

@@ -20,6 +20,7 @@ export async function GET(
       hanzi: s.hanzi,   // needed for TTS fallback when not yet aligned
       pinyin: s.pinyin,
       wordCount: s.wordCount,
+      words: s.words,
       start: t?.start ?? null,
       end: t?.end ?? null,
     };

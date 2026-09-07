@@ -19,12 +19,47 @@ const LEVEL_COLOR: Record<number, string> = {
 };
 
 const HSK_LEVELS = [1, 2, 3, 4, 5];
+type AlignmentStatus = 'Checked' | 'Uncheck';
+
+function getAlignmentStatus(categories: string[]): AlignmentStatus | null {
+  if (categories.includes('Uncheck')) return 'Uncheck';
+  if (categories.includes('Checked')) return 'Checked';
+  return null;
+}
+
+function getAlignmentStatusParam(status: string | null): AlignmentStatus | null {
+  const normalized = status?.toLowerCase();
+  if (normalized === 'checked') return 'Checked';
+  if (normalized === 'uncheck' || normalized === 'unchecked') return 'Uncheck';
+  return null;
+}
+
+function isAlignmentStatus(cat: string) {
+  return cat === 'Checked' || cat === 'Uncheck';
+}
+
+function AlignmentStatusBadge({ status }: { status: AlignmentStatus }) {
+  const isChecked = status === 'Checked';
+  return (
+    <span style={{
+      display: 'inline-block', padding: '2px 8px', borderRadius: 20,
+      background: isChecked ? 'rgba(22,163,74,0.12)' : 'rgba(200,57,43,0.12)',
+      border: `1px solid ${isChecked ? 'rgba(22,163,74,0.32)' : 'rgba(200,57,43,0.32)'}`,
+      fontSize: 9.5, color: isChecked ? '#16a34a' : '#c8392b',
+      fontFamily: 'JetBrains Mono, monospace', fontWeight: 700,
+      letterSpacing: '0.06em', whiteSpace: 'nowrap',
+    }}>
+      {status}
+    </span>
+  );
+}
 
 function DictationPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const hsk = searchParams.get('hsk') ? Number(searchParams.get('hsk')) : null;
   const q = searchParams.get('q') ?? '';
+  const status = getAlignmentStatusParam(searchParams.get('status'));
 
   const [lessons, setLessons] = useState<DictationLesson[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,15 +71,17 @@ function DictationPageInner() {
     const params = new URLSearchParams();
     if (hsk) params.set('hsk_level', String(hsk));
     if (q) params.set('q', q);
+    if (status) params.set('status', status);
     fetch(`/api/dictation/lessons?${params}`)
       .then(r => r.json())
       .then(d => { setLessons(d.lessons ?? []); setLoading(false); });
-  }, [hsk, q]);
+  }, [hsk, q, status]);
 
-  function setFilter(nextHsk: number | null) {
+  function setFilter(nextHsk: number | null, nextStatus = status) {
     const params = new URLSearchParams();
     if (nextHsk) params.set('hsk', String(nextHsk));
     if (q) params.set('q', q);
+    if (nextStatus) params.set('status', nextStatus);
     startTransition(() => router.replace(`/dictation?${params}`));
   }
 
@@ -53,6 +90,7 @@ function DictationPageInner() {
     const params = new URLSearchParams();
     if (hsk) params.set('hsk', String(hsk));
     if (val) params.set('q', val);
+    if (status) params.set('status', status);
     startTransition(() => router.replace(`/dictation?${params}`));
   }
 
@@ -121,6 +159,29 @@ function DictationPageInner() {
               HSK {lvl}
             </button>
           ))}
+          <div style={{ flex: 1 }} />
+          {(['Checked', 'Uncheck'] as AlignmentStatus[]).map(nextStatus => {
+            const active = status === nextStatus;
+            const isChecked = nextStatus === 'Checked';
+            const color = isChecked ? '#16a34a' : '#c8392b';
+            return (
+              <button
+                key={nextStatus}
+                onClick={() => setFilter(hsk, active ? null : nextStatus)}
+                style={{
+                  padding: '6px 14px', borderRadius: 20,
+                  border: `1.5px solid ${active ? color : 'var(--border)'}`,
+                  background: active ? color : 'transparent',
+                  color: active ? '#fff' : 'var(--ash)',
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {nextStatus}
+              </button>
+            );
+          })}
         </div>
 
         {loading ? (
@@ -129,7 +190,10 @@ function DictationPageInner() {
           <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)' }}>Không tìm thấy bài nào.</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
-            {lessons.map(l => (
+            {lessons.map(l => {
+              const alignmentStatus = getAlignmentStatus(l.categories);
+              const displayCategories = l.categories.filter(cat => !isAlignmentStatus(cat)).slice(0, 3);
+              return (
               <Link key={l.slug} href={`/dictation/${l.slug}`} style={{ textDecoration: 'none' }}>
                 <div
                   style={{
@@ -158,9 +222,12 @@ function DictationPageInner() {
                       }}>
                         HSK {l.hsk_level}
                       </span>
-                      <span style={{ fontSize: 13, color: 'var(--ash-light)' }}>
-                        {l.audio_url ? '🎧' : '🔇'}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {alignmentStatus && <AlignmentStatusBadge status={alignmentStatus} />}
+                        <span style={{ fontSize: 13, color: 'var(--ash-light)' }}>
+                          {l.audio_url ? '🎧' : '🔇'}
+                        </span>
+                      </div>
                     </div>
                     <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 18, fontWeight: 700, color: 'var(--ink)', lineHeight: 1.3 }}>
                       {l.title_zh_simplified}
@@ -170,7 +237,7 @@ function DictationPageInner() {
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 4 }}>
                       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        {l.categories.slice(0, 3).map(cat => (
+                        {displayCategories.map(cat => (
                           <span key={cat} style={{
                             display: 'inline-block', padding: '1px 6px', borderRadius: 4,
                             background: 'var(--paper-alt)', border: '1px solid var(--border)',
@@ -188,7 +255,8 @@ function DictationPageInner() {
                   </div>
                 </div>
               </Link>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>

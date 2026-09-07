@@ -2,10 +2,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import type { CharResult } from '@/lib/dictation';
+import { matchDictationWords, type WordSlot } from '@/lib/dictation';
 
 type DictationSentence = {
-  index: number; hanzi: string; pinyin: string; wordCount: number;
+  index: number; hanzi: string; pinyin: string; wordCount: number; words: string[];
   start: number | null; end: number | null;
 };
 type Lesson = {
@@ -13,14 +13,101 @@ type Lesson = {
   hsk_level: number; categories: string[]; audio_url: string | null;
   vocabCount?: number;
 };
-type CheckResult = { result: CharResult[]; correct_hanzi: string; pinyin: string; is_perfect: boolean };
+type CheckResult = { result: WordSlot[]; correct_hanzi: string; pinyin: string; is_perfect: boolean };
 
 const LEVEL_COLOR: Record<number, string> = {
   1: '#3a8a5c', 2: '#4a72a0', 3: '#a0720a', 4: '#c8392b', 5: '#7a3db0',
 };
-const DIFF_COLOR: Record<string, string> = {
-  correct: '#16a34a', wrong: '#dc2626', missing: '#6b7280', extra: '#dc2626',
+type AlignmentStatus = 'Checked' | 'Uncheck';
+
+function getAlignmentStatus(categories: string[]): AlignmentStatus | null {
+  if (categories.includes('Uncheck')) return 'Uncheck';
+  if (categories.includes('Checked')) return 'Checked';
+  return null;
+}
+
+function AlignmentStatusBadge({ status }: { status: AlignmentStatus }) {
+  const isChecked = status === 'Checked';
+  return (
+    <span style={{
+      display: 'inline-block', padding: '2px 8px', borderRadius: 20,
+      background: isChecked ? 'rgba(22,163,74,0.18)' : 'rgba(200,57,43,0.18)',
+      border: `1px solid ${isChecked ? 'rgba(22,163,74,0.4)' : 'rgba(200,57,43,0.4)'}`,
+      color: isChecked ? '#86efac' : '#fecaca',
+      fontSize: 9.5, fontWeight: 700,
+      fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em',
+      flexShrink: 0,
+    }}>
+      {status}
+    </span>
+  );
+}
+const SLOT_COLOR: Record<WordSlot['status'], string> = {
+  empty: 'var(--ash)',
+  partial: 'var(--ink)',
+  correct: '#16a34a',
+  wrong: '#dc2626',
+  extra: '#dc2626',
 };
+
+function WordBlanks({
+  slots,
+  showExpectedOnWrong = false,
+  activeIndex = -1,
+}: {
+  slots: WordSlot[];
+  showExpectedOnWrong?: boolean;
+  activeIndex?: number;
+}) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, rowGap: 16, alignItems: 'flex-end' }}>
+      {slots.map((slot, i) => {
+        const isActive = i === activeIndex;
+        const stars = '*'.repeat(Math.max(slot.expected.length, 1));
+        const display = slot.status === 'empty'
+          ? stars
+          : slot.status === 'partial'
+            ? slot.typed + '*'.repeat(Math.max(slot.expected.length - slot.typed.length, 0))
+            : slot.typed || stars;
+        const hintVisible = !!(slot.showHint && slot.expected && (slot.status !== 'empty' || isActive));
+        const hint = hintVisible
+          ? slot.expected
+          : showExpectedOnWrong && slot.status === 'wrong' && slot.expected && slot.typed.length >= slot.expected.length
+            ? slot.expected
+            : null;
+        return (
+          <div key={i} style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+            minWidth: Math.max(slot.expected.length, slot.typed.length, 1) * 14 + 8,
+          }}>
+            {hint ? (
+              <span style={{
+                fontSize: 10, fontFamily: 'JetBrains Mono, monospace', color: '#a0720a',
+                lineHeight: 1, fontWeight: 700, letterSpacing: '0.04em',
+              }}>
+                {hint}
+              </span>
+            ) : (
+              <span style={{ height: 10 }} />
+            )}
+            <span style={{
+              display: 'inline-flex', justifyContent: 'center',
+              minWidth: Math.max(slot.expected.length, 1) * 16 + 8,
+              padding: '2px 4px 1px',
+              borderBottom: `2px solid ${isActive ? '#a0720a' : SLOT_COLOR[slot.status]}`,
+              background: isActive ? 'rgba(160,114,10,0.06)' : 'transparent',
+              fontFamily: 'Noto Serif SC, JetBrains Mono, serif',
+              fontSize: 20, letterSpacing: '0.12em',
+              color: SLOT_COLOR[slot.status], lineHeight: 1.3,
+            }}>
+              {display}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function ScoreBar({ pct }: { pct: number }) {
   const color = pct >= 90 ? '#16a34a' : pct >= 60 ? '#a0720a' : '#dc2626';
@@ -36,30 +123,6 @@ function ScoreBar({ pct }: { pct: number }) {
   );
 }
 
-function DiffDisplay({ result }: { result: CharResult[] }) {
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 12 }}>
-      {result.map((r, i) => (
-        <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            width: 32, height: 36, borderRadius: 6,
-            background: r.status === 'correct' ? 'rgba(22,163,74,0.12)' : r.status === 'missing' ? 'rgba(107,114,128,0.1)' : 'rgba(220,38,38,0.12)',
-            border: `1.5px solid ${DIFF_COLOR[r.status]}`,
-            fontFamily: 'Noto Serif SC, serif', fontSize: 18,
-            color: r.status === 'correct' ? '#16a34a' : '#dc2626',
-            fontStyle: r.status === 'missing' ? 'italic' : 'normal',
-          }}>
-            {r.status === 'missing' ? '_' : r.char}
-          </span>
-          {r.status === 'wrong' && r.expected && (
-            <span style={{ fontSize: 10, fontFamily: 'Noto Serif SC, serif', color: '#16a34a', lineHeight: 1 }}>{r.expected}</span>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export default function DictationExercisePage() {
   const { slug } = useParams<{ slug: string }>();
@@ -78,6 +141,8 @@ export default function DictationExercisePage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [difficulty, setDifficulty] = useState<'easy' | 'normal' | 'hard'>('normal');
   const [ttsSupported, setTtsSupported] = useState(false);
+  const [composing, setComposing] = useState(false);
+  const [inputBeforeIme, setInputBeforeIme] = useState('');
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -126,6 +191,8 @@ export default function DictationExercisePage() {
     setIsPlaying(false);
     setUserInput('');
     setShowHint(false);
+    setComposing(false);
+    setInputBeforeIme('');
     textareaRef.current?.focus();
   }, [currentIndex]);
 
@@ -133,9 +200,9 @@ export default function DictationExercisePage() {
   const totalCorrect = Object.values(results).filter(r => r.is_perfect).length;
   const scorePercent = sentences.length
     ? Math.round((Object.values(results).reduce((acc, r) => {
-        const correctChars = r.result.filter(c => c.status === 'correct').length;
-        const totalChars = r.result.filter(c => c.status !== 'extra').length;
-        return acc + (totalChars > 0 ? correctChars / totalChars : 0);
+        const words = r.result.filter(s => s.status !== 'extra');
+        const correct = words.filter(s => s.status === 'correct').length;
+        return acc + (words.length > 0 ? correct / words.length : 0);
       }, 0) / sentences.length) * 100)
     : 0;
 
@@ -294,9 +361,20 @@ export default function DictationExercisePage() {
   );
 
   const levelColor = LEVEL_COLOR[lesson.hsk_level] ?? 'var(--ash)';
+  const alignmentStatus = getAlignmentStatus(lesson.categories);
   const currentSentence = sentences[currentIndex];
   const currentResult = results[currentIndex];
   const canPlaySentence = hasAlignedAudio(currentSentence) || ttsSupported;
+  const words = currentSentence?.words ?? [];
+  const liveSlots = matchDictationWords(composing ? inputBeforeIme : userInput, words);
+  const targetWordCount = words.length;
+  const filledWordCount = liveSlots.filter(s => s.status === 'correct' || s.status === 'wrong').length;
+  const remainingWordCount = liveSlots.filter(s => s.status === 'empty' || s.status === 'partial').length;
+  const extraWordCount = liveSlots.filter(s => s.status === 'extra').length;
+  const correctLiveCount = liveSlots.filter(s => s.status === 'correct').length;
+  const allWordsCorrect = targetWordCount > 0 && correctLiveCount === targetWordCount && extraWordCount === 0;
+  const activeWordIndex = liveSlots.findIndex(s => s.status === 'empty' || s.status === 'partial');
+  const wordCountColor = extraWordCount > 0 ? '#dc2626' : allWordsCorrect ? '#16a34a' : 'var(--ash)';
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--paper)', display: 'flex', flexDirection: 'column' }}>
@@ -312,6 +390,7 @@ export default function DictationExercisePage() {
           <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, background: levelColor, color: 'white', fontSize: 9.5, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em', flexShrink: 0 }}>
             HSK {lesson.hsk_level}
           </span>
+          {alignmentStatus && <AlignmentStatusBadge status={alignmentStatus} />}
           <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 14, color: '#f5f1e8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
             {lesson.title_zh_simplified}
           </span>
@@ -481,9 +560,33 @@ export default function DictationExercisePage() {
 
           {/* Input area */}
           <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 20, flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              Gõ những gì bạn nghe được: <span style={{ color: 'var(--ash-light)', fontWeight: 400 }}>Câu #{(currentSentence?.index ?? 0) + 1} ({currentSentence?.wordCount ?? 0} từ)</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                Gõ những gì bạn nghe được: <span style={{ color: 'var(--ash-light)', fontWeight: 400 }}>Câu #{(currentSentence?.index ?? 0) + 1} ({targetWordCount} từ)</span>
+              </div>
+              <div style={{
+                flexShrink: 0,
+                padding: '4px 8px',
+                borderRadius: 6,
+                border: `1px solid ${extraWordCount > 0 ? 'rgba(220,38,38,0.35)' : allWordsCorrect ? 'rgba(22,163,74,0.35)' : 'var(--border)'}`,
+                background: extraWordCount > 0 ? 'rgba(220,38,38,0.08)' : allWordsCorrect ? 'rgba(22,163,74,0.08)' : 'var(--paper-alt)',
+                color: wordCountColor,
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: 11,
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+              }}>
+                {filledWordCount}/{targetWordCount} từ
+              </div>
             </div>
+
+            {words.length > 0 && (
+              <WordBlanks
+                slots={liveSlots}
+                showExpectedOnWrong
+                activeIndex={currentResult ? -1 : activeWordIndex}
+              />
+            )}
 
             {/* Hint (pinyin) */}
             {(showHint || difficulty === 'easy') && currentSentence && (
@@ -496,13 +599,21 @@ export default function DictationExercisePage() {
               ref={textareaRef}
               value={userInput}
               onChange={e => setUserInput(e.target.value)}
+              onCompositionStart={() => {
+                setComposing(true);
+                setInputBeforeIme(userInput);
+              }}
+              onCompositionEnd={e => {
+                setComposing(false);
+                setUserInput(e.currentTarget.value);
+              }}
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   checkAnswer();
                 }
               }}
-              placeholder="Gõ câu trả lời của bạn ở đây… (Enter để chấm điểm)"
+              placeholder="Gõ liên tục, không cần dấu cách… (Enter để chấm điểm)"
               style={{
                 width: '100%', boxSizing: 'border-box',
                 minHeight: 100, resize: 'none',
@@ -516,6 +627,15 @@ export default function DictationExercisePage() {
               onFocus={e => (e.target.style.borderColor = levelColor)}
               onBlur={e => (e.target.style.borderColor = 'var(--border)')}
             />
+            <div style={{ marginTop: -8, fontFamily: 'Be Vietnam Pro, sans-serif', fontSize: 12, color: wordCountColor }}>
+              {extraWordCount > 0
+                ? 'Dư chữ so với câu gốc'
+                : remainingWordCount > 0
+                  ? `Còn thiếu ${remainingWordCount} từ`
+                  : allWordsCorrect
+                    ? 'Tất cả các từ đều đúng'
+                    : 'Đã đủ số từ — kiểm tra các từ đỏ'}
+            </div>
 
             {/* Action buttons */}
             <div style={{ display: 'flex', gap: 8 }}>
@@ -575,11 +695,10 @@ export default function DictationExercisePage() {
                     <span style={{ fontSize: 12, color: '#16a34a', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace' }}>✓ Hoàn hảo!</span>
                   ) : (
                     <span style={{ fontSize: 12, color: '#dc2626', fontFamily: 'JetBrains Mono, monospace' }}>
-                      {currentResult.result.filter(r => r.status === 'correct').length}/{currentResult.result.filter(r => r.status !== 'extra').length} đúng
+                      {currentResult.result.filter(r => r.status === 'correct').length}/{currentResult.result.filter(r => r.status !== 'extra').length} từ đúng
                     </span>
                   )}
                 </div>
-                <DiffDisplay result={currentResult.result} />
                 {!currentResult.is_perfect && (
                   <div style={{ marginTop: 12, padding: '8px 12px', background: 'rgba(22,163,74,0.06)', borderRadius: 6, border: '1px solid rgba(22,163,74,0.15)' }}>
                     <div style={{ fontSize: 10, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', marginBottom: 4, textTransform: 'uppercase' }}>Đáp án đúng</div>
@@ -636,20 +755,23 @@ export default function DictationExercisePage() {
                   </div>
 
                   {isAnswered && r ? (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                      {r.result.slice(0, 20).map((c, ci) => (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {r.result.filter(c => c.status !== 'extra').slice(0, 12).map((c, ci) => (
                         <span key={ci} style={{
-                          fontFamily: 'Noto Serif SC, serif', fontSize: 14,
-                          color: DIFF_COLOR[c.status],
+                          fontFamily: 'Noto Serif SC, serif', fontSize: 13,
+                          color: SLOT_COLOR[c.status],
                         }}>
-                          {c.status === 'missing' ? '_' : c.char}
+                          {c.status === 'empty' || c.status === 'partial' ? '*'.repeat(Math.max(c.expected.length, 1)) : c.typed}
                         </span>
                       ))}
-                      {r.result.length > 20 && <span style={{ fontSize: 10, color: 'var(--ash)' }}>…</span>}
+                      {r.result.filter(c => c.status !== 'extra').length > 12 && <span style={{ fontSize: 10, color: 'var(--ash)' }}>…</span>}
                     </div>
                   ) : (
-                    <div style={{ filter: 'blur(4px)', userSelect: 'none', fontSize: 13, color: 'var(--ash)', fontFamily: 'Noto Serif SC, serif' }}>
-                      {'　'.repeat(Math.min(s.wordCount, 8))}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, userSelect: 'none', fontSize: 12, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.08em' }}>
+                      {(s.words ?? []).slice(0, 8).map((w, wi) => (
+                        <span key={wi}>{'*'.repeat(Math.max(w.length, 1))}</span>
+                      ))}
+                      {(s.words ?? []).length > 8 && <span>…</span>}
                     </div>
                   )}
                 </div>

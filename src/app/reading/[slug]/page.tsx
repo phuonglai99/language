@@ -23,6 +23,32 @@ type VnResult = { zh: string; py: string; vn: string; pos: string; lessonTitle: 
 const LEVEL_COLOR: Record<number, string> = {
   1: '#3a8a5c', 2: '#4a72a0', 3: '#a0720a', 4: '#c8392b', 5: '#7a3db0',
 };
+type AlignmentStatus = 'Checked' | 'Uncheck';
+
+function getAlignmentStatus(categories: string[]): AlignmentStatus | null {
+  if (categories.includes('Uncheck')) return 'Uncheck';
+  if (categories.includes('Checked')) return 'Checked';
+  return null;
+}
+
+function isAlignmentStatus(cat: string) {
+  return cat === 'Checked' || cat === 'Uncheck';
+}
+
+function AlignmentStatusBadge({ status }: { status: AlignmentStatus }) {
+  const isChecked = status === 'Checked';
+  return (
+    <span style={{
+      padding: '2px 8px', borderRadius: 20,
+      background: isChecked ? 'rgba(22,163,74,0.12)' : 'rgba(200,57,43,0.12)',
+      border: `1px solid ${isChecked ? 'rgba(22,163,74,0.32)' : 'rgba(200,57,43,0.32)'}`,
+      fontSize: 10, color: isChecked ? '#16a34a' : '#c8392b',
+      fontFamily: 'JetBrains Mono, monospace', fontWeight: 700,
+    }}>
+      {status}
+    </span>
+  );
+}
 
 const isPunct = (hanzi: string) =>
   !hanzi.trim() || /^[\s，。！？、：；""''「」【】（）…—\-·]+$/.test(hanzi);
@@ -197,6 +223,8 @@ export default function ReadingLessonPage() {
   );
 
   const levelColor = LEVEL_COLOR[lesson.hsk_level] ?? 'var(--ash)';
+  const alignmentStatus = getAlignmentStatus(lesson.categories);
+  const displayCategories = lesson.categories.filter(cat => !isAlignmentStatus(cat));
   const vocabCount = lesson.content.flat().filter(w => !isPunct(w.hanzi)).reduce((set, w) => { set.add(w.hanzi.trim()); return set; }, new Set<string>()).size;
 
   return (
@@ -237,7 +265,8 @@ export default function ReadingLessonPage() {
             </div>
           )}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
-            {lesson.categories.map(c => (
+            {alignmentStatus && <AlignmentStatusBadge status={alignmentStatus} />}
+            {displayCategories.map(c => (
               <span key={c} style={{ padding: '2px 8px', borderRadius: 20, background: 'var(--card-bg)', border: '1px solid var(--border)', fontSize: 10, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace' }}>
                 {c}
               </span>
