@@ -60,3 +60,4 @@ data/lessons.db
 CLAUDE.md
 AGENTS.md
 DEPLOY_SQLITE_VPS.md
+/data/crawl-mandarin-bean.log

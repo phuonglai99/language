@@ -197,6 +197,7 @@ export default function ReadingLessonPage() {
   );
 
   const levelColor = LEVEL_COLOR[lesson.hsk_level] ?? 'var(--ash)';
+  const vocabCount = lesson.content.flat().filter(w => !isPunct(w.hanzi)).reduce((set, w) => { set.add(w.hanzi.trim()); return set; }, new Set<string>()).size;
 
   return (
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
@@ -235,12 +236,15 @@ export default function ReadingLessonPage() {
               繁體：{lesson.title_zh_traditional}
             </div>
           )}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
             {lesson.categories.map(c => (
               <span key={c} style={{ padding: '2px 8px', borderRadius: 20, background: 'var(--card-bg)', border: '1px solid var(--border)', fontSize: 10, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace' }}>
                 {c}
               </span>
             ))}
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--ash)', marginLeft: 4 }}>
+              {vocabCount} từ vựng
+            </span>
           </div>
         </div>
 

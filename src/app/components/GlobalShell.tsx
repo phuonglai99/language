@@ -16,9 +16,11 @@ type SearchResult = {
 const LEVEL_COLOR: Record<string, string> = {
   HSK1: '#3a8a5c', HSK2: '#4a72a0', HSK3: '#a0720a',
   HSK4: '#c8392b', HSK5: '#7a3db0', HSK6: '#2a6080',
+  'HSK7-9': '#2a6080', Khác: '#6b7280',
 };
 
 const HSK_LEVELS = ['HSK1', 'HSK2', 'HSK3', 'HSK4', 'HSK5', 'HSK6'];
+const GRAMMAR_HSK_LEVELS = ['HSK1', 'HSK2', 'HSK3', 'HSK4', 'HSK5', 'HSK6', 'HSK7-9', 'Khác'];
 
 const SECTIONS = [
   { key: 'vocab',    icon: '卡', label: 'Từ vựng',       color: '#c8392b' },
@@ -50,6 +52,7 @@ function activeSection(pathname: string): string {
   if (pathname.startsWith('/grammar')) return 'grammar';
   if (pathname.startsWith('/vocab')) return 'vocab';
   if (pathname.startsWith('/lesson')) return 'vocab';
+  if (pathname.startsWith('/dictation')) return 'listen';
   return '';
 }
 
@@ -63,7 +66,8 @@ export default function GlobalShell() {
   const dragStartW = useRef(SIDEBAR_W_DEFAULT);
   const [lessons, setLessons] = useState<LessonMeta[]>([]);
   const [mbLessons, setMbLessons] = useState<MBLessonMeta[]>([]);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({ vocab: true });
+  const [grammarCounts, setGrammarCounts] = useState<Record<string, number>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({ vocab: true, grammar: true });
   const [subExpanded, setSubExpanded] = useState<Record<string, boolean>>({ 'grammar-HSK2': true });
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -75,6 +79,11 @@ export default function GlobalShell() {
   useEffect(() => {
     fetch('/api/lessons').then(r => r.json()).then(d => setLessons(d.lessons ?? []));
     fetch('/api/reading').then(r => r.json()).then(d => setMbLessons(d.lessons ?? []));
+    fetch('/api/grammar').then(r => r.json()).then(d => {
+      const map: Record<string, number> = {};
+      for (const row of (d.counts ?? []) as { hsk: string; count: number }[]) map[row.hsk] = row.count;
+      setGrammarCounts(map);
+    });
   }, []);
 
   useEffect(() => {
@@ -309,41 +318,30 @@ export default function GlobalShell() {
                         <span style={{ fontSize: 11, color: 'rgba(200,191,176,0.5)' }}>🎙</span>
                         <span style={{ fontSize: 12, color: 'rgba(200,191,176,0.75)', fontFamily: 'Be Vietnam Pro, sans-serif' }}>Chép chính tả Tiếng Trung</span>
                       </Link>
+                      <Link href="/dictation/align" onClick={() => setOpen(false)} style={{ textDecoration: 'none', padding: '5px 8px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8, transition: 'background 0.15s' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                        <span style={{ fontSize: 11, color: 'rgba(200,191,176,0.5)' }}>✂️</span>
+                        <span style={{ fontSize: 12, color: 'rgba(200,191,176,0.75)', fontFamily: 'Be Vietnam Pro, sans-serif' }}>Cắt audio thủ công</span>
+                      </Link>
                     </div>
                   ) : sec.key === 'grammar' ? (
-                    // Grammar: collapsible HSK sub-folders
-                    HSK_LEVELS.map(lvl => {
-                      const grp = grouped[lvl] ?? [];
-                      if (grp.length === 0) return null;
-                      const subKey = `grammar-${lvl}`;
-                      const isSubOpen = subExpanded[subKey] ?? false;
-                      return (
-                        <div key={lvl}>
-                          <button
-                            onClick={() => toggleSub(subKey)}
-                            style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, padding: '4px 16px 4px 46px', color: LEVEL_COLOR[lvl] ?? 'var(--ash-light)' }}
-                          >
-                            <span style={{ fontSize: 9, transition: 'transform 0.15s', transform: isSubOpen ? 'rotate(90deg)' : 'rotate(0deg)', display: 'inline-block' }}>▶</span>
-                            <span style={{ fontSize: 9.5, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700 }}>{lvl}</span>
-                            <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: 'rgba(200,191,176,0.3)', marginLeft: 'auto' }}>{grp.length}</span>
-                          </button>
-                          {isSubOpen && grp.map(l => (
-                            <Link
-                              key={l.id}
-                              href={lessonHref(sec.key, l.id)}
-                              onClick={closeAll}
-                              title={l.title}
-                              style={{ display: 'flex', alignItems: 'center', padding: '5px 14px 5px 66px', textDecoration: 'none', color: 'rgba(200,191,176,0.8)', fontSize: 12, transition: 'background 0.1s, color 0.1s' }}
-                              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#f5f1e8'; }}
-                              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(200,191,176,0.8)'; }}
-                            >
-                              <span style={{ fontSize: 9, color: 'rgba(200,191,176,0.25)', marginRight: 6, flexShrink: 0 }}>└</span>
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title}</span>
-                            </Link>
-                          ))}
-                        </div>
-                      );
-                    })
+                    <div>
+                      {GRAMMAR_HSK_LEVELS.map(lvl => {
+                        const n = grammarCounts[lvl] ?? 0;
+                        if (!n) return null;
+                        const lvlColor = LEVEL_COLOR[lvl] ?? 'var(--ash-light)';
+                        return (
+                          <Link key={lvl} href={`/grammar/hsk/${encodeURIComponent(lvl)}`} onClick={closeAll}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 16px 4px 52px', textDecoration: 'none', transition: 'background 0.1s' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                            <span style={{ fontSize: 9.5, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.12em', color: lvlColor, textTransform: 'uppercase', fontWeight: 700 }}>{lvl}</span>
+                            <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: 'rgba(200,191,176,0.3)', marginLeft: 'auto' }}>{n} điểm →</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
                   ) : (
                     // Other sections (vocab, quiz, game): collapsible HSK sub-folders
                     HSK_LEVELS.map(lvl => {

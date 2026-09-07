@@ -11,6 +11,7 @@ type DictationSentence = {
 type Lesson = {
   slug: string; title_en: string; title_zh_simplified: string;
   hsk_level: number; categories: string[]; audio_url: string | null;
+  vocabCount?: number;
 };
 type CheckResult = { result: CharResult[]; correct_hanzi: string; pinyin: string; is_perfect: boolean };
 
@@ -315,8 +316,17 @@ export default function DictationExercisePage() {
             {lesson.title_zh_simplified}
           </span>
           <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(200,191,176,0.5)', flexShrink: 0 }}>
-            {totalAnswered}/{sentences.length} câu
+            {lesson.vocabCount ?? sentences.reduce((n, s) => n + s.wordCount, 0)} từ · {totalAnswered}/{sentences.length} câu
           </span>
+          {sentences.some(s => s.start == null || s.end == null) && (
+            <Link href={`/dictation/align/${slug}`} style={{
+              padding: '5px 10px', borderRadius: 6, textDecoration: 'none',
+              background: 'rgba(200,57,43,0.2)', color: '#fecaca',
+              fontSize: 11, fontFamily: 'JetBrains Mono, monospace', flexShrink: 0,
+            }}>
+              Cắt thủ công
+            </Link>
+          )}
         </div>
       </header>
 

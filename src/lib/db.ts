@@ -240,22 +240,33 @@ export function getMBLesson(slug: string): MBLesson | null {
   };
 }
 
-export function getMBLessonsByHsk(level: number): Omit<MBLesson, 'content'>[] {
-  const db = getDb();
-  ensureMBTable(db);
-  const rows = db.prepare(
-    'SELECT slug, url, title_en, title_zh_simplified, title_zh_traditional, hsk_level, categories, audio_url, content_text FROM mb_lessons WHERE hsk_level = ? ORDER BY slug'
-  ).all(level) as Record<string, unknown>[];
-  return rows.map(r => ({ ...(r as Omit<MBLesson, 'categories' | 'content'>), categories: JSON.parse(r.categories as string) }));
+export type MBLessonListItem = Omit<MBLesson, 'content'> & { vocabCount: number };
+
+function mapMBListRow(r: Record<string, unknown>): MBLessonListItem {
+  const { content, categories, ...rest } = r;
+  return {
+    ...(rest as Omit<MBLesson, 'categories' | 'content'>),
+    categories: JSON.parse(categories as string),
+    vocabCount: vocabCountFromContentJson(content),
+  };
 }
 
-export function getAllMBLessons(): Omit<MBLesson, 'content'>[] {
+export function getMBLessonsByHsk(level: number): MBLessonListItem[] {
   const db = getDb();
   ensureMBTable(db);
   const rows = db.prepare(
-    'SELECT slug, url, title_en, title_zh_simplified, title_zh_traditional, hsk_level, categories, audio_url, content_text FROM mb_lessons ORDER BY hsk_level, slug'
+    'SELECT slug, url, title_en, title_zh_simplified, title_zh_traditional, hsk_level, categories, audio_url, content_text, content FROM mb_lessons WHERE hsk_level = ? ORDER BY slug'
+  ).all(level) as Record<string, unknown>[];
+  return rows.map(mapMBListRow);
+}
+
+export function getAllMBLessons(): MBLessonListItem[] {
+  const db = getDb();
+  ensureMBTable(db);
+  const rows = db.prepare(
+    'SELECT slug, url, title_en, title_zh_simplified, title_zh_traditional, hsk_level, categories, audio_url, content_text, content FROM mb_lessons ORDER BY hsk_level, slug'
   ).all() as Record<string, unknown>[];
-  return rows.map(r => ({ ...(r as Omit<MBLesson, 'categories' | 'content'>), categories: JSON.parse(r.categories as string) }));
+  return rows.map(mapMBListRow);
 }
 
 export function getMBLessonCount(): number {
@@ -263,6 +274,99 @@ export function getMBLessonCount(): number {
   ensureMBTable(db);
   const row = db.prepare('SELECT COUNT(*) as n FROM mb_lessons').get() as { n: number };
   return row.n;
+}
+
+export interface MBAlignSummary {
+  slug: string;
+  title_en: string;
+  title_zh_simplified: string;
+  hsk_level: number;
+  audio_url: string | null;
+  sentenceCount: number;
+  unmatchedCount: number;
+  hasTimestamps: boolean;
+}
+
+const MB_WORD_PUNCT = /^[\s，。？！、：；""''「」【】（）…—·]+$/;
+
+export function countLessonVocab(content: MBLessonWord[][]): number {
+  const seen = new Set<string>();
+  for (const para of content) {
+    for (const w of para) {
+      const h = (w.hanzi ?? '').trim();
+      if (!h || MB_WORD_PUNCT.test(h)) continue;
+      seen.add(h);
+    }
+  }
+  return seen.size;
+}
+
+function vocabCountFromContentJson(raw: unknown): number {
+  if (typeof raw !== 'string' || !raw) return 0;
+  try { return countLessonVocab(JSON.parse(raw) as MBLessonWord[][]); } catch { return 0; }
+}
+
+function countContentSentences(content: MBLessonWord[][]): number {
+  return content.filter(para =>
+    para.some(w => w.hanzi.trim() && !/^[\s，。？！、：；""''「」【】（）…—·]+$/.test(w.hanzi)),
+  ).length;
+}
+
+export function getMBAlignSummaries(): MBAlignSummary[] {
+  const db = getDb();
+  ensureMBTable(db);
+  const rows = db.prepare(
+    'SELECT slug, title_en, title_zh_simplified, hsk_level, audio_url, content, sentence_timestamps FROM mb_lessons ORDER BY hsk_level, slug',
+  ).all() as Record<string, unknown>[];
+
+  return rows.map(r => {
+    let timestamps: SentenceTimestamp[] | null = null;
+    if (typeof r.sentence_timestamps === 'string' && r.sentence_timestamps) {
+      try { timestamps = JSON.parse(r.sentence_timestamps); } catch { /* ignore */ }
+    }
+    const hasTimestamps = Array.isArray(timestamps);
+    let sentenceCount = 0;
+    let unmatchedCount = 0;
+    if (hasTimestamps && timestamps) {
+      sentenceCount = timestamps.length;
+      unmatchedCount = timestamps.filter(t => t.start == null || t.end == null).length;
+    } else {
+      try {
+        sentenceCount = countContentSentences(JSON.parse(r.content as string) as MBLessonWord[][]);
+      } catch { sentenceCount = 0; }
+      unmatchedCount = sentenceCount;
+    }
+    return {
+      slug: r.slug as string,
+      title_en: r.title_en as string,
+      title_zh_simplified: r.title_zh_simplified as string,
+      hsk_level: r.hsk_level as number,
+      audio_url: (r.audio_url as string) ?? null,
+      sentenceCount,
+      unmatchedCount,
+      hasTimestamps,
+    };
+  });
+}
+
+export function saveMBLessonAlignment(
+  slug: string,
+  timestamps: SentenceTimestamp[],
+  content?: MBLessonWord[][],
+): boolean {
+  const db = getDb();
+  ensureMBTable(db);
+  const exists = db.prepare('SELECT slug FROM mb_lessons WHERE slug = ?').get(slug);
+  if (!exists) return false;
+  const tsJson = JSON.stringify(timestamps);
+  if (content) {
+    db.prepare('UPDATE mb_lessons SET sentence_timestamps = ?, content = ? WHERE slug = ?')
+      .run(tsJson, JSON.stringify(content), slug);
+  } else {
+    db.prepare('UPDATE mb_lessons SET sentence_timestamps = ? WHERE slug = ?')
+      .run(tsJson, slug);
+  }
+  return true;
 }
 
 // ── Notes ────────────────────────────────────────────────────────────────────
@@ -395,6 +499,127 @@ export interface LevelVocabItem {
   pos: string;
   vn: string;
   ex: { zh: string; vn: string };
+}
+
+export interface HanziiGrammarRow {
+  id: number;
+  uid: string | null;
+  title: string;
+  use_for: string | null;
+  keywords: string | null;
+  level: string | null;
+  hsk: string;
+  contents: string;
+  examples: string | null;
+}
+
+function ensureHanziiGrammarTable(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS hanzii_grammar (
+      id INTEGER PRIMARY KEY,
+      uid TEXT,
+      title TEXT NOT NULL,
+      use_for TEXT,
+      keywords TEXT,
+      level TEXT,
+      hsk TEXT,
+      contents TEXT NOT NULL,
+      examples TEXT,
+      raw TEXT,
+      crawled_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS hanzii_grammar_hsk ON hanzii_grammar(hsk);
+  `);
+}
+
+const EX_PINYIN_RE = /^[-•]\s*(.+?)\s*\/([^/]+)\/\s*(.*)$/;
+const EX_LINE_RE = /^[-•]\s+(.+)$/;
+
+function parseHanziiExamples(contents: string[]): { zh: string; vn: string; note?: string }[] {
+  const examples: { zh: string; vn: string; note?: string }[] = [];
+  let inExamples = false;
+  for (const raw of contents) {
+    const line = raw.trim();
+    if (/^ví dụ\s*[:：.]?/i.test(line) || /^vd\s*[:：]/i.test(line)) {
+      inExamples = true;
+      continue;
+    }
+    const withPy = line.match(EX_PINYIN_RE);
+    if (withPy) {
+      examples.push({ zh: withPy[1].trim(), vn: withPy[3].trim(), note: withPy[2].trim() });
+      continue;
+    }
+    if (inExamples) {
+      const m = line.match(EX_LINE_RE);
+      if (m && /^[\u4e00-\u9fff]/.test(m[1].trim())) {
+        const rest = m[1].trim();
+        const split = rest.match(/^([\u4e00-\u9fff0-9A-Za-z，。！？、：；“”‘’「」【】（）…—·\s]+)\s+(.+)$/);
+        if (split && /[\u4e00-\u9fff]/.test(split[1]) && /[A-Za-zÀ-ỹ]/.test(split[2])) {
+          examples.push({ zh: split[1].trim(), vn: split[2].trim() });
+        } else {
+          examples.push({ zh: rest, vn: '' });
+        }
+        continue;
+      }
+      inExamples = false;
+    }
+  }
+  return examples;
+}
+
+function rowToHanziiGrammar(row: HanziiGrammarRow): import('@/types').HanziiGrammar {
+  const contents: string[] = row.contents ? JSON.parse(row.contents) : [];
+  const storedExamples = row.examples ? JSON.parse(row.examples) as unknown[] : [];
+  const parsed = parseHanziiExamples(contents);
+  const examples = parsed.length > 0
+    ? parsed
+    : storedExamples.filter(e => e && typeof e === 'object').map(e => {
+        const x = e as Record<string, string>;
+        return { zh: x.zh ?? x.chinese ?? '', vn: x.vn ?? x.mean ?? x.vi ?? '', note: x.note || x.pinyin };
+      });
+  const explLines = contents.filter(line => {
+    const t = line.trim();
+    if (/^ví dụ\s*[:：.]?/i.test(t) || /^vd\s*[:：]/i.test(t)) return false;
+    if (EX_PINYIN_RE.test(t) || (EX_LINE_RE.test(t) && /[\u4e00-\u9fff]/.test(t))) return false;
+    return true;
+  });
+  const formulaFromContents = contents.find(l => /cấu trúc\s*[:：]/i.test(l))?.trim();
+  return {
+    id: row.id,
+    title: row.keywords || row.title,
+    titleVn: row.title,
+    formula: row.keywords || formulaFromContents || row.use_for || '',
+    explanation: explLines.join('\n'),
+    examples,
+    level: row.level ?? '',
+    hsk: row.hsk,
+    keywords: row.keywords ?? '',
+    useFor: row.use_for ?? '',
+  };
+}
+
+export function getHanziiGrammarByHsk(hsk: string): import('@/types').HanziiGrammar[] {
+  const db = getDb();
+  ensureHanziiGrammarTable(db);
+  const rows = db.prepare(
+    'SELECT id, uid, title, use_for, keywords, level, hsk, contents, examples FROM hanzii_grammar WHERE hsk = ? ORDER BY id ASC'
+  ).all(hsk) as HanziiGrammarRow[];
+  return rows.map(rowToHanziiGrammar);
+}
+
+export function getHanziiGrammarCounts(): { hsk: string; count: number }[] {
+  const db = getDb();
+  ensureHanziiGrammarTable(db);
+  return db.prepare(
+    'SELECT hsk, COUNT(*) as count FROM hanzii_grammar GROUP BY hsk ORDER BY hsk'
+  ).all() as { hsk: string; count: number }[];
+}
+
+export function getHanziiGrammarCount(): number {
+  const db = getDb();
+  ensureHanziiGrammarTable(db);
+  const row = db.prepare('SELECT COUNT(*) as n FROM hanzii_grammar').get() as { n: number };
+  return row.n;
 }
 
 export function getVocabByLevel(level: string): LevelVocabItem[] {

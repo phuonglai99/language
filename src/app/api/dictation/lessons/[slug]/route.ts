@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMBLesson } from '@/lib/db';
+import { getMBLesson, countLessonVocab } from '@/lib/db';
 import { extractSentences } from '@/lib/dictation';
 
 export async function GET(
@@ -34,6 +34,7 @@ export async function GET(
       hsk_level: lesson.hsk_level,
       categories: lesson.categories,
       audio_url: lesson.audio_url,
+      vocabCount: countLessonVocab(lesson.content),
     },
     sentences,
   });

@@ -9,6 +9,7 @@ type MBLesson = {
   title_en: string; title_zh_simplified: string; title_zh_traditional: string;
   hsk_level: number; categories: string[];
   audio_url: string | null; content_text: string;
+  vocabCount?: number;
 };
 
 const LEVEL_COLOR: Record<number, string> = {
@@ -192,9 +193,13 @@ function ReadingPageInner() {
                       {l.title_en}
                     </div>
 
-                    {/* Categories */}
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4, paddingBottom: 4 }}>
-                      {l.categories.slice(0, 3).map(cat => <CategoryBadge key={cat} cat={cat} />)}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 4, paddingBottom: 4 }}>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {l.categories.slice(0, 3).map(cat => <CategoryBadge key={cat} cat={cat} />)}
+                      </div>
+                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#6b7280', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        {l.vocabCount ?? 0} từ
+                      </span>
                     </div>
                   </div>
                 </div>

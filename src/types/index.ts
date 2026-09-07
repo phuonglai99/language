@@ -58,3 +58,16 @@ export interface Lesson {
   vocab: VocabCard[];
   grammar: GrammarPoint[];
 }
+
+export interface HanziiGrammar {
+  id: number;
+  title: string;
+  titleVn: string;
+  formula: string;
+  explanation: string;
+  examples: { zh: string; vn: string; note?: string }[];
+  level: string;
+  hsk: string;
+  keywords: string;
+  useFor: string;
+}
