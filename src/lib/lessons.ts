@@ -6,10 +6,12 @@ const DATA_FILE = path.join(process.cwd(), 'data', 'mandarin-bean-lessons.json')
 const PROGRESS_FILE = path.join(process.cwd(), 'data', 'crawl-progress.json');
 
 let cachedData: LessonsData | null = null;
+let cacheTimestamp = 0;
+const CACHE_TTL_MS = process.env.NODE_ENV === 'production' ? Infinity : 30_000;
 
 function getData(): LessonsData {
-  // Don't cache in dev so new lessons from the crawler are visible without restart
-  if (cachedData && process.env.NODE_ENV === 'production') return cachedData;
+  const now = Date.now();
+  if (cachedData && now - cacheTimestamp < CACHE_TTL_MS) return cachedData;
 
   // Try final file first, fall back to in-progress file during crawling
   const fileToRead = fs.existsSync(DATA_FILE) ? DATA_FILE : PROGRESS_FILE;
@@ -28,6 +30,7 @@ function getData(): LessonsData {
     by_hsk_level: parsed.by_hsk_level ?? {},
     lessons,
   };
+  cacheTimestamp = Date.now();
   return cachedData;
 }
 

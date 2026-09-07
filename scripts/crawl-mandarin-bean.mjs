@@ -164,6 +164,10 @@ async function parseLessonPage(url) {
         const definition = $(rubyEl).attr('data-mb-definition') || null;
         const wordId = $(rubyEl).attr('data-mb-word-id') || null;
         if (hanzi) currentParagraph.push({ hanzi, pinyin, hsk, definition, wordId });
+      } else if (node.type === 'text') {
+        // Plain text nodes: punctuation and numbers between ruby elements
+        const text = node.data ?? '';
+        if (text.trim()) currentParagraph.push({ hanzi: text, pinyin: '', hsk: null, definition: null, wordId: null });
       }
     });
     if (currentParagraph.length > 0) contentParagraphs.push(currentParagraph);
