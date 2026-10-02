@@ -26,7 +26,7 @@ export interface MigrationStep {
 }
 
 const ROOT = path.resolve(__dirname, '../..');
-const SCHEMA_PATH = path.join(ROOT, 'docs/db/schema.sql');
+const SCHEMA_PATH = path.join(ROOT, 'src/server/db/migrations/001_init.sql');
 const DEFAULT_SOURCE = path.join(ROOT, 'data/lessons.db');
 const TARGET = path.join(ROOT, 'data/hsk.db');
 
@@ -51,6 +51,8 @@ function main() {
   const db = new Database(TARGET);
   db.pragma('foreign_keys = ON');
   db.exec(fs.readFileSync(SCHEMA_PATH, 'utf8'));
+  // The app's migration runner (src/server/db/migrate.ts) starts after version 1.
+  db.prepare('INSERT INTO schema_migrations (version) VALUES (1)').run();
 
   const log = (msg: string) => console.log(`  ${msg}`);
   console.log(`source: ${path.relative(ROOT, source)}`);

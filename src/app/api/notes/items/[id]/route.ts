@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { deleteNoteItem } from '@/lib/db';
+import { deleteNoteItem } from '@/server';
 
 export const runtime = 'nodejs';
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  deleteNoteItem(id);
+  await deleteNoteItem(id);
   return NextResponse.json({ ok: true });
 }

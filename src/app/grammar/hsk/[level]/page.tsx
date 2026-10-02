@@ -4,11 +4,12 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { HanziiGrammar } from '@/types';
 import { Pagination } from '@/app/components/Pagination';
+import { UNLEVELED_LABEL } from '@/shared/grammar';
 
 const LEVEL_COLOR: Record<string, string> = {
   HSK1: '#22c55e', HSK2: '#3b82f6', HSK3: '#f59e0b',
   HSK4: '#ef4444', HSK5: '#8b5cf6', HSK6: '#06b6d4',
-  'HSK7-9': '#0f766e', Khác: '#6b7280',
+  'HSK7-9': '#0f766e', [UNLEVELED_LABEL]: '#6b7280', Khác: '#6b7280',
 };
 
 const PAGE_SIZE = 12;

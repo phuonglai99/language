@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { GRAMMAR_LEVEL_LABELS, UNLEVELED_LABEL } from '@/shared/grammar';
 
 type LessonMeta = {
   id: string; title: string; subtitle?: string; level: string;
@@ -16,11 +17,11 @@ type SearchResult = {
 const LEVEL_COLOR: Record<string, string> = {
   HSK1: '#3a8a5c', HSK2: '#4a72a0', HSK3: '#a0720a',
   HSK4: '#c8392b', HSK5: '#7a3db0', HSK6: '#2a6080',
-  'HSK7-9': '#2a6080', Khác: '#6b7280',
+  'HSK7-9': '#2a6080', [UNLEVELED_LABEL]: '#6b7280',
 };
 
 const HSK_LEVELS = ['HSK1', 'HSK2', 'HSK3', 'HSK4', 'HSK5', 'HSK6'];
-const GRAMMAR_HSK_LEVELS = ['HSK1', 'HSK2', 'HSK3', 'HSK4', 'HSK5', 'HSK6', 'HSK7-9', 'Khác'];
+const GRAMMAR_HSK_LEVELS = GRAMMAR_LEVEL_LABELS;
 
 const SECTIONS = [
   { key: 'vocab',    icon: '卡', label: 'Từ vựng',       color: '#c8392b' },

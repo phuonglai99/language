@@ -28,3 +28,11 @@ Kiểm tra:
 Thử khôi phục: mở bằng `sqlite3 -readonly`, `integrity_check` và đếm số dòng như trên: đạt.
 
 Cần làm tay: copy 2 file B0 ra ngoài thư mục repo (ổ ngoài hoặc cloud).
+
+## B1 — 2026-10-02 18:51 (sau khi duyệt báo cáo P6)
+
+| File | SHA-256 file | Ghi chú |
+|---|---|---|
+| `hsk-B1-20261002-1851.db` | `82d70f745132f9777154abbb42cdb2f3c7c1e2074eb83de3bf46a476d7268c12` | Từ `data/hsk.db` do `npm run migrate:v4` tạo ở commit `940a1bb` |
+
+Kiểm tra: `integrity_check` = ok; SHA-256 của `.dump`: gốc = backup = `f3b94c7c51884ebc4013e588f51d3b3d6c677920a1fbb3ed4999ee01c7f2a9ae`. Báo cáo P6: 22/22 đạt.

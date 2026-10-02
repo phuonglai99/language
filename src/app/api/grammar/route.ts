@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getHanziiGrammarByHsk, getHanziiGrammarCounts } from '@/lib/db';
+import { listGrammarByLevel, listGrammarCounts } from '@/server';
 
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
   const level = req.nextUrl.searchParams.get('level')?.trim() ?? '';
   if (!level) {
-    const counts = getHanziiGrammarCounts();
-    return NextResponse.json({ counts });
+    return NextResponse.json({ counts: await listGrammarCounts() });
   }
-  const items = getHanziiGrammarByHsk(level);
-  return NextResponse.json({ items });
+  return NextResponse.json({ items: await listGrammarByLevel(level) });
 }

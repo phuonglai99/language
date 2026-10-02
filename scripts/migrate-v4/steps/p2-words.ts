@@ -25,43 +25,13 @@ import type { MigrationStep } from '../index';
 import {
   hanChars, neutralToneVariants, normalizePinyin, pinyinPlain, stripVietnamese,
 } from '../../../src/shared/text';
+import { PARTS_OF_SPEECH, parsePosLabels } from '../../../src/shared/pos';
 
-const PARTS_OF_SPEECH: [code: string, nameVi: string, nameZh: string][] = [
-  ['n', 'Danh từ', '名词'],
-  ['v', 'Động từ', '动词'],
-  ['adj', 'Tính từ', '形容词'],
-  ['adv', 'Phó từ', '副词'],
-  ['m', 'Lượng từ', '量词'],
-  ['conj', 'Liên từ', '连词'],
-  ['pron', 'Đại từ', '代词'],
-  ['prep', 'Giới từ', '介词'],
-  ['num', 'Số từ', '数词'],
-  ['part', 'Trợ từ', '助词'],
-  ['propn', 'Danh từ riêng', '专有名词'],
-  ['intj', 'Thán từ', '叹词'],
-  ['vo', 'Động từ ly hợp', '离合词'],
-  ['modal', 'Động từ năng nguyện', '能愿动词'],
-  ['phrase', 'Cụm từ', '短语'],
-];
-
-/** Old free-text labels (Vietnamese, or short codes in note_items) → POS code. */
-const POS_LABEL: Record<string, string> = {
-  'danh từ': 'n', 'động từ': 'v', 'tính từ': 'adj', 'phó từ': 'adv', 'lượng từ': 'm',
-  'liên từ': 'conj', 'đại từ': 'pron', 'giới từ': 'prep', 'số từ': 'num', 'trợ từ': 'part',
-  'danh từ riêng': 'propn', 'thán từ': 'intj', 'động từ ly hợp': 'vo', 'cụm từ': 'phrase',
-  'từ để hỏi': 'pron', // đại từ nghi vấn
-  'bổ ngữ kết quả': 'phrase',
-  n: 'n', v: 'v', adj: 'adj', adv: 'adv',
-};
-
-/** "Động từ / Danh từ", "v/n" → ['v', 'n']. Unknown labels throw so nothing is silently dropped. */
+/** Unknown labels throw so nothing is silently dropped. */
 function parsePos(raw: string | null | undefined): string[] {
-  if (!raw?.trim()) return [];
-  return raw.split('/').map(part => {
-    const code = POS_LABEL[part.trim().toLowerCase()];
-    if (!code) throw new Error(`Unknown part of speech "${part.trim()}" in "${raw}"`);
-    return code;
-  });
+  const { codes, unknown } = parsePosLabels(raw);
+  if (unknown.length) throw new Error(`Unknown part of speech "${unknown.join(', ')}" in "${raw}"`);
+  return codes;
 }
 
 interface VocabItem {
