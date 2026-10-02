@@ -147,3 +147,15 @@ export function stripVietnamese(text: string): string {
     .replace(/Đ/g, 'D')
     .toLowerCase();
 }
+
+// ── Cleaning imported vocab cells ─────────────────────────────────────────────
+
+/** Drops notes typed into a vocab cell: "得（助动词）", "哪里 (哪儿)", "ān pái [an bài]". */
+export function stripNotes(text: string): string {
+  return text.replace(/[（(][^）)]*[）)]/g, '').replace(/\[[^\]]*\]/g, '').trim();
+}
+
+/** First reading when a cell lists alternatives: "shuí/ shéi" → "shuí", "tǔ/tù" → "tǔ". */
+export function firstReading(pinyin: string): string {
+  return pinyin.split('/')[0].trim();
+}

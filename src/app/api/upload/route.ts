@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extractSegmentsFromDocx, parseHskXlsx } from '@/lib/parse-docx';
 import { analyzeLesson } from '@/lib/claude';
-import { saveLesson } from '@/lib/db';
-import { nanoid } from '@/lib/nanoid';
+import { importLessons } from '@/server';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -28,9 +27,7 @@ export async function POST(req: NextRequest) {
       if (lessonDrafts.length === 0) {
         return NextResponse.json({ error: 'Không đọc được dữ liệu từ file Excel' }, { status: 400 });
       }
-      const now = new Date().toISOString();
-      const lessons = lessonDrafts.map(d => ({ ...d, id: nanoid(12), createdAt: now }));
-      for (const l of lessons) saveLesson(l);
+      const lessons = await importLessons(lessonDrafts);
       return NextResponse.json({ lessons });
     }
 
@@ -41,8 +38,7 @@ export async function POST(req: NextRequest) {
     }
     const baseName = file.name.replace(/\.docx$/, '');
     const analyzed = await analyzeLesson(segments, baseName);
-    const lesson = { ...analyzed, id: nanoid(12), createdAt: new Date().toISOString() };
-    saveLesson(lesson);
+    const [lesson] = await importLessons([analyzed]);
     return NextResponse.json({ lesson });
   } catch (err) {
     console.error('Upload error:', err);

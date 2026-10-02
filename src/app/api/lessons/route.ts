@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getAllLessons } from '@/lib/db';
+import { listLessons } from '@/server';
 
 export const runtime = 'nodejs';
 
 export async function GET() {
-  const lessons = getAllLessons();
-  return NextResponse.json({ lessons });
+  return NextResponse.json({ lessons: await listLessons() });
 }

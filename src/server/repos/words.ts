@@ -35,26 +35,43 @@ export function findOrCreateWord(db: Database.Database, hanziRaw: string, pinyin
  */
 export function findOrCreateSense(
   db: Database.Database, wordId: number, meaningVi: string, posLabel: string, source: Source,
+  hskLevel: number | null = null,
 ): number | null {
   const vi = meaningVi.trim();
   if (!vi) return null;
   const existing = db.prepare(
-    'SELECT id FROM word_senses WHERE word_id = ? AND lower(meaning_vi) = lower(?) ORDER BY position LIMIT 1',
-  ).pluck().get(wordId, vi) as number | undefined;
-  if (existing != null) return existing;
+    'SELECT id, hsk_level FROM word_senses WHERE word_id = ? AND lower(meaning_vi) = lower(?) ORDER BY position LIMIT 1',
+  ).get(wordId, vi) as { id: number; hsk_level: number | null } | undefined;
+  if (existing) {
+    if (hskLevel != null && (existing.hsk_level == null || hskLevel < existing.hsk_level)) {
+      db.prepare('UPDATE word_senses SET hsk_level = ? WHERE id = ?').run(hskLevel, existing.id);
+    }
+    return existing.id;
+  }
 
   const { codes } = parsePosLabels(posLabel);
   const insert = db.prepare(`
-    INSERT INTO word_senses (word_id, position, pos, meaning_vi, source)
-    VALUES (?, (SELECT COALESCE(MAX(position) + 1, 0) FROM word_senses WHERE word_id = ?), ?, ?, ?)
+    INSERT INTO word_senses (word_id, position, pos, meaning_vi, hsk_level, source)
+    VALUES (?, (SELECT COALESCE(MAX(position) + 1, 0) FROM word_senses WHERE word_id = ?), ?, ?, ?, ?)
   `);
   let first: number | null = null;
   for (const pos of codes.length ? codes : [null]) {
-    const id = Number(insert.run(wordId, wordId, pos, vi, source).lastInsertRowid);
+    const id = Number(insert.run(wordId, wordId, pos, vi, hskLevel, source).lastInsertRowid);
     first ??= id;
   }
   syncWordSearch(db, wordId);
   return first;
+}
+
+/** Adds an example to a sense unless that sentence is already there. */
+export function addSenseExample(db: Database.Database, senseId: number, zh: string, vi: string): void {
+  const text = zh.trim();
+  if (!text) return;
+  db.prepare(`
+    INSERT INTO sense_examples (sense_id, position, zh, vi)
+    SELECT ?, (SELECT COALESCE(MAX(position) + 1, 0) FROM sense_examples WHERE sense_id = ?), ?, ?
+    WHERE NOT EXISTS (SELECT 1 FROM sense_examples WHERE sense_id = ? AND zh = ?)
+  `).run(senseId, senseId, text, vi.trim() || null, senseId, text);
 }
 
 /** Rewrites the words_fts row for one word (meanings come from all of its senses). */

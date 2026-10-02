@@ -10,7 +10,8 @@ type LessonMeta = {
 };
 
 type SearchResult = {
-  lessonId: string; lessonTitle: string; level: string;
+  /** null: dictionary word outside any lesson — shown, but not a link. */
+  lessonId: string | null; lessonTitle: string; level: string;
   zh: string; py: string; vn: string; pos: string;
 };
 
@@ -237,8 +238,10 @@ export default function GlobalShell() {
                 <div style={{ padding: '12px 14px', color: 'rgba(200,191,176,0.5)', fontSize: 12 }}>Không tìm thấy từ nào</div>
               )}
               {!searching && searchResults.map((r, i) => (
-                <Link key={i} href={`/lesson/${r.lessonId}`} onClick={closeAll}
-                  style={{ display: 'block', padding: '8px 14px', borderBottom: '1px solid rgba(255,255,255,0.05)', textDecoration: 'none', transition: 'background 0.1s' }}
+                <Link key={i} href={r.lessonId ? `/lesson/${r.lessonId}` : '#'}
+                  onClick={e => { if (r.lessonId) closeAll(); else e.preventDefault(); }}
+                  aria-disabled={!r.lessonId}
+                  style={{ display: 'block', padding: '8px 14px', borderBottom: '1px solid rgba(255,255,255,0.05)', textDecoration: 'none', transition: 'background 0.1s', cursor: r.lessonId ? 'pointer' : 'default' }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                 >
@@ -249,7 +252,7 @@ export default function GlobalShell() {
                   </div>
                   <div style={{ fontSize: 11, color: 'rgba(200,191,176,0.7)', marginTop: 1 }}>{r.vn}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                    <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', background: LEVEL_COLOR[r.level] ?? 'var(--ash)', color: '#fff', padding: '1px 5px', borderRadius: 3 }}>{r.level}</span>
+                    {r.level && <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', background: LEVEL_COLOR[r.level] ?? 'var(--ash)', color: '#fff', padding: '1px 5px', borderRadius: 3 }}>{r.level}</span>}
                     <span style={{ fontSize: 10, color: 'rgba(200,191,176,0.5)' }}>{r.lessonTitle}</span>
                   </div>
                 </Link>

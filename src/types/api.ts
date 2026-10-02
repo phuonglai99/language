@@ -142,3 +142,40 @@ export interface CharacterDetailDTO {
   botu: { t: 'y' | 'am' | 'solo'; ph: string; n: string }[] | null;
   botuSource: 'claude' | null;
 }
+
+// ── Vocabulary lessons & search ──────────────────────────────────────────────
+
+/** Sidebar / home card for a vocabulary lesson (an HSK list or an uploaded topic). */
+export interface LessonMetaDTO {
+  /** "hsk-<n>" or "topic-<slug>" (see shared/lessons.ts). */
+  id: string;
+  title: string;
+  subtitle: string;
+  /** "HSK2"; '' when unknown. */
+  level: string;
+  topic?: string;
+  createdAt: string;
+  vocabCount: number;
+  grammarCount: number;
+}
+
+export interface LevelVocabItemDTO {
+  lessonId: string;
+  lessonTitle: string;
+  zh: string;
+  py: string;
+  pos: string;
+  vn: string;
+  ex: { zh: string; vn: string };
+}
+
+export interface SearchResultDTO {
+  /** Lesson the word belongs to; null for dictionary words outside any lesson. */
+  lessonId: string | null;
+  lessonTitle: string;
+  level: string;
+  zh: string;
+  py: string;
+  vn: string;
+  pos: string;
+}

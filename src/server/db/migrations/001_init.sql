@@ -84,7 +84,7 @@ CREATE TABLE words (
   pinyin        TEXT NOT NULL,                   -- chuẩn hoá: không khoảng trắng thừa, dạng từ điển (yīzài, không phải yí zài); so khớp không phân biệt hoa/thường
   pinyin_plain  TEXT NOT NULL,                   -- huì → hui, lǜ → lv (tìm kiếm không dấu)
   han_viet      TEXT,                            -- hội / bả bả
-  hsk_level     INTEGER CHECK (hsk_level BETWEEN 1 AND 7),  -- cấp THẤP NHẤT mà từ xuất hiện
+  hsk_level     INTEGER CHECK (hsk_level BETWEEN 1 AND 7),  -- cấp thấp nhất trong các danh sách HSK 2.0 đã import; NULL nếu không thuộc danh sách nào
   topic         TEXT,
   source        TEXT NOT NULL CHECK (source IN ('import','mandarin_bean','ai','manual')),
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
@@ -118,7 +118,7 @@ CREATE TABLE word_senses (
   pos         TEXT REFERENCES parts_of_speech(code),     -- NULL = chưa xác định (nghĩa từ Mandarin Bean không có từ loại)
   meaning_vi  TEXT,                              -- biết (làm gì)
   meaning_en  TEXT,                              -- can; to know how to
-  hsk_level   INTEGER CHECK (hsk_level BETWEEN 1 AND 7),  -- nghĩa này được dạy ở cấp nào (会 "biết" HSK1, "cuộc họp" HSK3)
+  hsk_level   INTEGER CHECK (hsk_level BETWEEN 1 AND 7),  -- import: cấp HSK 2.0 của danh sách; mandarin_bean: cấp Mandarin Bean gắn cho token (thang HSK 3.0, có cấp 7)
   note        TEXT,                              -- cách dùng, lưu ý
   source      TEXT NOT NULL CHECK (source IN ('import','mandarin_bean','ai','manual')),
   mb_word_id  TEXT,                                -- Mandarin Bean wordId = 1 mục từ điển (钱 "tiền" ≠ 钱 "họ Tiền"); 1 wordId có thể có nhiều definition

@@ -23,7 +23,7 @@ import path from 'node:path';
 import type Database from 'better-sqlite3';
 import type { MigrationStep } from '../index';
 import {
-  hanChars, neutralToneVariants, normalizePinyin, pinyinPlain, stripVietnamese,
+  firstReading, hanChars, neutralToneVariants, normalizePinyin, pinyinPlain, stripNotes, stripVietnamese,
 } from '../../../src/shared/text';
 import { PARTS_OF_SPEECH, parsePosLabels } from '../../../src/shared/pos';
 
@@ -64,16 +64,6 @@ function minLevel(a: number | null, b: number | null): number | null {
   if (a == null) return b;
   if (b == null) return a;
   return Math.min(a, b);
-}
-
-/** Drops notes typed into a vocab cell: "得（助动词）", "哪里 (哪儿)", "ān pái [an bài]". */
-function stripNotes(text: string): string {
-  return text.replace(/[（(][^）)]*[）)]/g, '').replace(/\[[^\]]*\]/g, '').trim();
-}
-
-/** First reading when a cell lists alternatives: "shuí/ shéi" → "shuí", "tǔ/tù" → "tǔ". */
-function firstReading(pinyin: string): string {
-  return pinyin.split('/')[0].trim();
 }
 
 const loose = (p: string) => p.toLowerCase().replace(/'/g, '');
@@ -152,12 +142,6 @@ class WordStore {
     const source = cur.source === 'mandarin_bean' && opts.source === 'import' ? 'import' : cur.source;
     this.updateRow.run(minLevel(cur.hsk_level, opts.hsk), topic, source, entry.id);
     return entry.id;
-  }
-
-  setLevel(id: number, hsk: number | null) {
-    const cur = this.getRow.get(id) as { topic: string | null; hsk_level: number | null; source: string };
-    const level = minLevel(cur.hsk_level, hsk);
-    if (level !== cur.hsk_level) this.updateRow.run(level, cur.topic, cur.source, id);
   }
 
   toneConflicts(): string[] {
@@ -255,8 +239,9 @@ export const p2Words: MigrationStep = {
           if (!t.wordId || !t.definition) continue;
           tokenCount++;
           const hanzi = t.hanzi.trim();
+          // words.hsk_level is the HSK 2.0 list level (imports only). Mandarin Bean tags tokens on
+          // the HSK 3.0 scale (it has level 7), so its level stays on the sense.
           const wordId = words.mbWord(hanzi, normalizePinyin(hanzi, t.pinyin));
-          words.setLevel(wordId, t.hsk ?? null);
           const senseId = senses.upsert(wordId, `mb\u0000${t.wordId}\u0000${t.definition}`, {
             pos: null, vi: null, en: t.definition.trim(), hsk: t.hsk ?? null,
             source: 'mandarin_bean', mbWordId: t.wordId,

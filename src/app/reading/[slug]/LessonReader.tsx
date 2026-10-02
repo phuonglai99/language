@@ -204,7 +204,8 @@ export default function LessonReader({
       .then(r => r.json())
       .then(d => {
         const results: VnResult[] = d.results ?? [];
-        const match = results.find(r => r.zh === hanzi) ?? results[0] ?? null;
+        // Exact word only: falling back to the first hit showed (and saved to notes) another word's meaning.
+        const match = results.find(r => r.zh === hanzi) ?? null;
         lookupCache.current[hanzi] = match;
         cb(match);
       })

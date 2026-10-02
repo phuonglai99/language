@@ -9,3 +9,5 @@ export * from './repos/notes';
 export * from './repos/grammar';
 export * from './repos/passages';
 export * from './repos/characters';
+export * from './repos/vocab';
+export * from './services/lessonImport';

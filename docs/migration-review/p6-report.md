@@ -1,6 +1,6 @@
 # Báo cáo đối chiếu P6 — DB cũ ↔ DB v4
 
-Sinh bởi `npm run migrate:v4:report` lúc 2026-10-02T12:00:53.971Z.
+Sinh bởi `npm run migrate:v4:report` lúc 2026-10-02T12:10:08.548Z.
 
 ## 1. Tổng quan
 
@@ -68,26 +68,26 @@ Sinh bởi `npm run migrate:v4:report` lúc 2026-10-02T12:00:53.971Z.
 
 | Từ | Pinyin | HSK | Chủ đề | Nguồn | Nghĩa |
 |---|---|---|---|---|---|
-| 代 | dài | 5 |  | mandarin_bean | ?: generation; dynasty; age; period; (historical) era; (geological) eon |
-| 编织 | biānzhī | 6 |  | import | v: đan, dệt |
-| 祝 | zhù | 3 |  | import | ?: to pray for / to wish · v: chúc |
-| 资源 | zīyuán | 5 |  | import | ?: natural resource / resource · n: nguồn tài nguyên |
-| 滑雪场 | huáxuěchǎng |  |  | mandarin_bean | ?: ski slopes; ski resort |
-| 疫情 | yìqíng |  |  | mandarin_bean | ?: epidemic situation |
-| 景点 | jǐngdiǎn | 4 |  | mandarin_bean | ?: tourist attraction; scenic spot |
-| 水平 | shuǐpíng | 3 |  | import | ?: a standard; a level (of ability, development etc) · n: trình độ |
-| 应对 | yìngduì | 5 |  | mandarin_bean | ?: to handle; to deal with |
-| 出汗 | chūhàn |  |  | mandarin_bean | ?: to perspire / to sweat |
-| 秃 | tū | 6 |  | import | n: Hói |
-| 耗费 | hàofèi | 6 |  | import | n: tiêu tốn, tiêu hao |
-| 他 | tā | 1 |  | import | ?: he; him; his · pron: anh ấy, ông ấy |
-| 经理 | jīnglǐ | 3 |  | mandarin_bean | ?: manager / director |
-| 能够 | nénggòu | 4 |  | mandarin_bean | ?: to be capable of / to be able to · ?: can |
-| 文 | wén | 7 |  | mandarin_bean | ?: language / culture / writing / Kangxi radical 67 |
-| 不折不扣 | bùzhébùkòu | 7 |  | mandarin_bean | ?: a hundred percent / out-and-out |
-| 检票 | jiǎnpiào | 3 |  | mandarin_bean | ?: to inspect a ticket / to examine a ballot |
-| 费 | fèi | 4 |  | mandarin_bean | ?: fee / expenses |
-| 二来 | èrlái |  |  | mandarin_bean | ?: secondly, ... |
+| 早上 | zǎoshang | 2 |  | import | ?: early morning · n: buổi sáng |
+| 行政 | xíngzhèng | 6 |  | import | ?: (attributive) administrative; executive · n: Hành chính |
+| 铃声 | língshēng |  |  | mandarin_bean | ?: ring / ringtone / bell stroke / tintinnabulation |
+| 西 | xī | 3 |  | import | ?: west · n: phía tây |
+| 有的人 | yǒuderén |  |  | mandarin_bean | ?: some people; certain people |
+| 书写 | shūxiě |  |  | mandarin_bean | ?: to write |
+| 纸巾 | zhǐjīn |  |  | mandarin_bean | ?: paper towel / napkin / facial tissue |
+| 悲伤 | bēishāng |  |  | mandarin_bean | ?: sad; sorrowful |
+| 桥 | qiáo | 4 |  | import | ?: bridge · n: cầu |
+| 不了 | bùliǎo |  |  | mandarin_bean | ?: (as a resultative verb suffix) unable to (do sth) |
+| 精益求精 | jīngyìqiújīng | 6 |  | import | phrase: cải tiến, hoàn thiện |
+| 巴不得 | bābude | 6 |  | import | adj: nóng lòng, mong mỏi |
+| 废纸 | fèizhǐ |  |  | mandarin_bean | ?: waste paper |
+| 参会 | cānhuì |  |  | mandarin_bean | ?: to attend a conference or meeting |
+| 掠 | lüè |  |  | mandarin_bean | ?: to take over by force / to rob / to plunder / to brush over / to skim / to sweep |
+| 殖民地 | zhímíndì | 6 |  | import | n: Thuộc địa |
+| 增添 | zēngtiān | 6 |  | import | n: Thêm vào |
+| 喜出望外 | xǐchūwàngwài |  |  | mandarin_bean | ?: to be pleased beyond one's expectations (idiom) |
+| 灭 | miè |  |  | mandarin_bean | ?: to extinguish or put out / to go out (of a fire etc) / to exterminate or wipe out / to drown |
+| 闭 | bì |  |  | mandarin_bean | ?: to close / to stop up / to shut / to obstruct |
 
 ### 3.3 Bài khóa (5 bài × 3 câu đầu)
 
