@@ -206,3 +206,13 @@ scripts/align-whisper.py  ghi kết quả qua API (PUT /api/dictation/align/[slu
 6. Chuyển script sang `.ts` dùng services. `align-whisper.py` ghi qua API.
 7. Ở bước cutover (Phase 8): xoá `src/lib/db.ts` và các hàm thừa (`diffHanzi`, `updateKanjiBotu`, `getHanziiGrammarCount`, `/lessons` + `src/lib/lessons.ts`).
 8. Sau đó mới đổi DTO dần theo tính năng mới: nhiều nghĩa, bản dịch theo câu, đề thi.
+
+---
+
+## 8. Ghi chú triển khai (P7, 2026-10-02)
+
+- **Cấu trúc thực tế:** `src/server/db/{connection,migrate}.ts`, `src/server/repos/{notes,grammar,passages,characters,vocab,words}.ts`, `src/server/services/{hanzii,lessonImport,mandarinBean}.ts`. Hàm thuần dùng chung nằm ở `src/shared/` (`text`, `pos`, `hanzi`, `grammar`, `grammarParse`, `sentences`, `lessons`). DTO nằm ở `src/types/api.ts`.
+- **`server-only` không được cài.** Next tự xử lý `import 'server-only'` lúc build. Khi chạy code app ngoài Next (ví dụ kiểm tra route bằng `tsx`), cần cung cấp một module rỗng tên `server-only` qua `NODE_PATH`.
+- **Turbopack và đường dẫn động:** `path.join(/* turbopackIgnore: true */ process.cwd(), …)` ở `connection.ts` và `migrate.ts`. Thiếu comment này, build gom cả thư mục dự án và lỗi ở symlink `scripts/venv/bin/python`.
+- **Migration theo version:** `001_init.sql` (schema v4) do `npm run migrate:v4` áp dụng; `002_system_folders.sql` trở đi do `getDb()` tự áp dụng khi mở DB.
+- **`align-whisper.py` cần app đang chạy** (`--api`, mặc định `http://localhost:3000`).

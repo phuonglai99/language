@@ -1,6 +1,6 @@
 # Báo cáo đối chiếu P6 — DB cũ ↔ DB v4
 
-Sinh bởi `npm run migrate:v4:report` lúc 2026-10-02T12:10:08.548Z.
+Sinh bởi `npm run migrate:v4:report` lúc 2026-10-02T12:11:40.493Z.
 
 ## 1. Tổng quan
 

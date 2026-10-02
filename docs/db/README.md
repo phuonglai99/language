@@ -122,7 +122,7 @@ Hai nguồn đầu trùng nhau 2.835 từ.
 | `pinyin_plain` | 🔧 tính từ `pinyin` (bỏ dấu) |
 | `traditional` | ⚠️ không có. Chuyển đổi tự động bằng thư viện (OpenCC) |
 | `han_viet` | 🔧 ghép `characters.han_viet` từng chữ. ⚠️ chữ có nhiều âm Hán Việt ("nhĩ.nễ") cần chọn tay |
-| `hsk_level` | 🔧 cấp thấp nhất trong các bài "HSK1".."HSK6" (106 từ xuất hiện ở 2 cấp), nếu không có thì lấy `content[][].hsk` (1–7) |
+| `hsk_level` | 🔧 cấp thấp nhất trong các bài "HSK1".."HSK6" (từ xuất hiện ở 2 cấp giữ cấp thấp hơn). **Không** lấy `content[][].hsk` của Mandarin Bean (thang HSK 3.0, có cấp 7); cấp đó nằm ở `word_senses.hsk_level` |
 | `topic` | 🔧 `lessons.title` của 3 bài chủ đề ("Bài 2 – Giao thông" → "Giao thông") |
 | `source` | 🔧 `import` / `mandarin_bean` / `manual` (từ ghi chú) |
 | *(bỏ `mb_word_id`)* | Chuyển xuống `word_senses.mb_word_id`: 1 `wordId` là 1 mục từ điển; cùng (chữ, pinyin) có thể có nhiều `wordId` (钱 "tiền" / "họ Tiền") |

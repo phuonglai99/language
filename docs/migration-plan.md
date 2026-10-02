@@ -310,6 +310,29 @@ Xong khi:
 - Mọi trang chạy đúng với `DB_PATH=data/hsk.db`. Kiểm tra trong trình duyệt và xem console/log không có lỗi.
 - `npm run build` và `npm run lint` không lỗi.
 
+**Kết quả (2026-10-02):**
+
+| Nhóm | Commit | Kiểm chứng |
+|---|---|---|
+| Nền (`src/server/db`, barrel `@/server`, migration `002`) | `392f2fa` | Migration `002` tự chạy khi mở DB |
+| Ghi chú | `392f2fa` | 14/14 kiểm tra trên bản sao DB (thêm từ có sẵn và từ mới, chống trùng, folder hệ thống không đổi tên/xoá được, xoá folder kéo theo item) |
+| Ngữ pháp | `392f2fa` | Số điểm theo cấp khớp; điểm 需 hiện đủ 3 dòng cấu trúc; link cũ `/grammar/hsk/Khác` vẫn mở được |
+| Bài khóa, chép chính tả, căn audio | `6e69200` | So với code cũ trên cả 729 bài: giống hệt (trừ bài có 2 danh mục); lưu căn audio giữ đúng nghĩa token và pinyin |
+| Chữ Hán, nét viết | `137e5ce` | So với code cũ trên 507 chữ: giống hệt; ô "Phổ biến" hết lỗi luôn hiện "Thấp" |
+| Bài học, từ vựng, tìm kiếm, upload | `bb07b5f` | HSK1/2/5 khớp 100% danh sách cũ; HSK3/4/6 chỉ thiếu 104 từ đã có ở cấp thấp hơn; bài chủ đề khớp từ và ví dụ, nghĩa chỉ khác chữ hoa đầu câu; 11/11 kiểm tra upload |
+| Script | `4296e8e` | Tách câu tái tạo đúng 6.629 câu (729/729 bài); import lại toàn bộ JSON không đụng câu/mốc audio |
+| Toàn bộ | `4296e8e` | `npm run build` đạt; gọi trực tiếp 21 route handler trên bản sao DB đều trả đúng |
+
+Thay đổi so với plan, phát hiện khi làm:
+- **Bài học là "bài ảo"** `/lesson/hsk-<n>` và `/lesson/topic-<slug>`, không làm route mới `/vocab/hsk/...`. Giao diện học (flashcard, quiz, ghép thẻ) không phải sửa. 12 id cũ chuyển hướng trong `next.config.ts`.
+- **`words.hsk_level` chỉ lấy từ danh sách HSK 2.0 đã import.** Mandarin Bean gắn cấp theo thang HSK 3.0 (có cấp 7); trộn 2 thang làm 65 từ bị kéo về HSK1. Cấp của Mandarin Bean giữ ở `word_senses.hsk_level`.
+- **Cấp của bài chủ đề không còn lưu ở đâu.** Đang suy ra gần đúng: 2/6 bài hiện HSK1 thay vì HSK2. Cần chốt cách sửa (xem mục "Còn mở" bên dưới).
+- **Build:** đường dẫn tính từ `process.cwd()` phải có `/* turbopackIgnore: true */`, nếu không Turbopack gom cả dự án và lỗi ở symlink `scripts/venv`.
+
+**Chưa kiểm tra được trên trình duyệt:** trình duyệt tích hợp không chạy được dev server (macOS chặn quyền truy cập thư mục `Desktop`, lỗi `EPERM uv_cwd`). Cần chạy `npm run dev` và đi qua từng trang trước P8.
+
+**Còn mở:** lưu cấp cho bài chủ đề. Phương án đề xuất: bảng nhỏ `topics(name PK, hsk_level, created_at)` và `words.topic` trỏ tới `topics.name`. Đây là metadata của chủ đề, không phải bảng nối từ ↔ bài.
+
 ---
 
 ## P8. Cutover — S · [G2]
