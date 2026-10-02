@@ -125,6 +125,18 @@ Kiểm tra:
 - `characters` = 11.906 + số dòng thêm.
 - `character_components` = 1.146 (643 chữ).
 - `character_strokes` = 8.009, trong đó `has_medians = 0` là 305.
+
+**Kết quả chạy (2026-10-02):**
+
+| Mục | Kết quả | Ghi chú |
+|---|---|---|
+| `radicals` | 286 dòng (214 bộ + 72 dạng biến thể) | 219 dạng được dùng tới; 50 chữ ghi "phác 攴" thống nhất thành "phộc"; 1 chữ (脉) ghi "nguyệt" không kèm chữ → 月 |
+| `characters` | 11.905 `ok` + 19 `pending` | Bỏ 1 dòng hỏng: `\uFFFD`+"ya" là chữ 牙 bị lỗi mã hoá lúc crawl; 牙 đã có dòng đúng nên không mất dữ liệu. 19 chữ `pending` = 18 thành phần Ý/Âm + 1 chữ trong bài khóa (con số ~28 trong plan đếm trùng và lẫn dấu câu) |
+| `formation` | Khớp DB cũ | 9.138 hình thanh (gồm 1 dòng "hình thanh &amp; hình thanh"); 1.210 hình thanh + hội ý |
+| `frequency` | Khớp 5 mức | |
+| `character_components` | 1.145 dòng / 642 chữ | Phần chênh 1 là dòng hỏng ở trên |
+| `character_strokes` | 8.009 dòng | 305 dòng ở DB cũ không phải object HanziWriter mà là **mảng đường nét trần**; đã chuyển thành `{"strokes": [...]}`, `has_medians = 0`. Không chữ nào trong số này nằm trong nội dung học (299/305 có độ phổ biến "rất thấp") |
+| FK, `integrity_check` | Không lỗi | `hsk.db` hiện 41 MB |
 - `PRAGMA foreign_key_check` trả rỗng.
 
 ---
@@ -290,7 +302,7 @@ Thứ tự ưu tiên:
 3. Nghĩa vi cho ~3.900 từ chỉ có ở Mandarin Bean.
 4. Dịch câu bài khóa (vi/en) và `title_vi`; đặt `translation_status = 'ai'`.
 5. Phân tích Ý/Âm cho chữ còn thiếu, ưu tiên 2.883 chữ dùng trong vocab và bài khóa.
-6. `traditional` cho từ; dữ liệu nét cho 305 chữ thiếu `medians`.
+6. `traditional` cho từ; dữ liệu nét đầy đủ (có `medians`) cho 305 chữ đang chỉ có mảng đường nét.
 
 Mỗi loại cần một trang duyệt nhỏ hoặc một script xuất/nhập CSV. Duyệt xong đặt `verified = 1` / `translation_status = 'reviewed'`.
 

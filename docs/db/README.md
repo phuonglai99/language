@@ -58,7 +58,7 @@ Ký hiệu cột "Nguồn":
 | `form`, `han_viet` | 🔧 tách `kanji.radical` "nữ 女" thành `han_viet='nữ'`, `form='女'` (222 giá trị khác nhau, 1 dòng rỗng) |
 | `kangxi_no`, `meaning_vi`, `stroke_count` | ⚠️ seed từ danh sách 214 bộ Khang Hy |
 
-**`characters`** (11.906 dòng + ~28 dòng thêm cho chữ chưa có) — cũ: `kanji`
+**`characters`** (11.905 dòng + 19 dòng `pending` cho chữ chưa có) — cũ: `kanji`
 
 | Cột | Nguồn |
 |---|---|
@@ -77,7 +77,7 @@ Ký hiệu cột "Nguồn":
 | `crawl_status`, `crawl_error`, `crawled_at` | 🔧 `kanji.crawled_at`. Hiện 0 dòng lỗi |
 | *(dòng thêm)* | ⚠️ 21 thành phần Ý/Âm (亼, 丩, 咼…) và 7 chữ trong vocab chưa có trong `kanji`: thêm dòng `crawl_status='pending'` để crawl sau |
 
-**`character_components`** (1.146 dòng, cho 643 chữ) — cũ: `kanji.botu_claude`
+**`character_components`** (1.145 dòng, cho 642 chữ) — cũ: `kanji.botu_claude`
 
 | Cột | Nguồn |
 |---|---|
@@ -101,7 +101,7 @@ Tên cột cũ gây hiểu nhầm: dữ liệu không phải SVG mà là JSON n�
 |---|---|
 | `char` | ✅ `kanji.char`, chỉ lấy các dòng có dữ liệu |
 | `data` | ✅ `kanji.strokes_svg` (8.009 dòng hợp lệ) |
-| `has_medians` | 🔧 có `$.medians` hay không (7.704 có, 305 không) |
+| `has_medians` | 🔧 có `$.medians` hay không (7.704 có; 305 dòng cũ là mảng đường nét trần, được chuyển thành `{"strokes": [...]}`) |
 | `source` | 🔧 `'hanzii'` |
 
 ⚠️ 3.896 chữ có `strokes_svg = ''` (Hanzii không trả về). Những chữ này không có dòng trong bảng mới. UI vẫn để HanziWriter tự tải từ CDN `hanzi-writer-data`, giống hiện nay. Lưu ý: đây đều là chữ hiếm, thử 30 chữ thì CDN cũng không có chữ nào. Toàn bộ 2.883 chữ dùng trong vocab và bài khóa đều đã có dữ liệu nét trong DB.
@@ -247,7 +247,7 @@ Các điểm ⚠️ của bảng này:
 | Phase | Việc | Kiểm tra / điều kiện qua |
 |---|---|---|
 | **0. Chuẩn bị** | Commit các thay đổi đang dở. Backup `lessons.db` vào `data/backups/` kèm checksum. Tạo `scripts/migrate-v4/` (TypeScript, chạy bằng `tsx`). Tạo module hằng số dùng chung: bộ dấu câu (gồm `“ ” ‘ ’`), chuẩn hoá pinyin | Checksum bản backup khớp DB gốc |
-| **1. Chữ Hán** | Seed `radicals` (222 dạng + số Khang Hy) → `characters` (+ ~28 dòng `pending`) → `character_components` (`verified = 0`) → `character_strokes` (8.009 dòng) | `characters` = 11.906 + số dòng thêm; `components` = 1.146; `strokes` = 8.009; không lỗi FK |
+| **1. Chữ Hán** | Seed `radicals` (222 dạng + số Khang Hy) → `characters` (+ 19 dòng `pending`) → `character_components` (`verified = 0`) → `character_strokes` (8.009 dòng) | `characters` = 11.906 + số dòng thêm; `components` = 1.146; `strokes` = 8.009; không lỗi FK |
 | **2. Từ vựng** | Seed `parts_of_speech`. Tạo `words` theo thứ tự: bài HSK → bài chủ đề → wordId Mandarin Bean → ghi chú. Chuẩn hoá pinyin: bỏ khoảng trắng, đưa biến điệu của 一/不 về dạng từ điển. Sinh `word_characters`, `word_senses` (`pos` cũ nhập với `verified = 0`), `sense_examples`, `words_fts` | ~8.900 từ; 7.531 nghĩa en + ~5.000 nghĩa vi; 106 từ trùng giữa các cấp đã gộp; mọi chữ trong `words` có trong `characters` |
 | **3. Bài khóa** | `passages`, `passage_sentences`. Token dấu câu (theo bộ dấu câu chung) không có `s`. `review_status` lấy từ `categories` | 729 bài; 6.629 câu; tổng token = 119.864; số mốc audio khớp số câu; in danh sách 3 bài lệch trạng thái (`shopping-story`, `distribute-watermelon`, `climb-mountain`) để duyệt |
 | **4. Ngữ pháp** | `grammar_points` (`source_data` = `hanzii` / `import`). Parse `contents` một lần, giữ nguyên văn giải thích. `grammar_examples`, `grammar_exercises` | 1.744 điểm; 437 điểm `hsk_level = NULL`; 27 bài tập; 38 ví dụ từ bài upload |

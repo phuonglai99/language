@@ -74,7 +74,7 @@ Vấn đề chung:
 - Thay cho 3 chỗ lưu trùng: `kanji.botu`, `kanji.botu_claude`, `lessons.data.vocab[].botu`. Đã đối chiếu: 643/643 chữ trong vocab đều có trong `botu_claude`.
 - `role`: `meaning` (ý) / `sound` (âm) / `self` (độc thể, chữ không tách được).
 - `source` (`ai` / `manual`) để biết dòng nào đã có người duyệt.
-- Hiện chỉ có 643 chữ được phân tích (1.146 dòng). 21 thành phần là chữ hiếm (亼, 丩, 咼…) chưa có trong `kanji`. Migration sẽ thêm dòng cho chúng với `crawl_status = 'pending'` để không lỗi FK.
+- Hiện chỉ có 643 chữ được phân tích (1.146 dòng). 18 thành phần là chữ hiếm (亼, 丩, 咼…) chưa có trong `kanji`. Migration sẽ thêm dòng cho chúng với `crawl_status = 'pending'` để không lỗi FK.
 
 **`hv_meanings`, `hv_compounds`, `hv_dictionary` — dữ liệu tra cứu của Hanzii về chữ.**
 
@@ -113,7 +113,7 @@ Vấn đề chung:
 |---|---|
 | Có dữ liệu | 8.009 |
 | … trong đó có `medians` | 7.704 |
-| … trong đó thiếu `medians` (animation có thể sai) | 305 |
+| … trong đó là mảng đường nét trần, không phải object HanziWriter (thiếu `medians`) | 305 |
 | Chuỗi rỗng | 3.896 |
 
 - **Bước 5 (tải từ CDN) gần như không bao giờ xảy ra trong thực tế:**
@@ -128,7 +128,7 @@ character_strokes(char PK → characters, data JSON, has_medians 0/1, source)
 - Đổi tên cột thành `data` vì nội dung là JSON. `CHECK` bắt buộc phải có mảng `strokes`.
 - Tách bảng riêng (25 MB) để đọc thông tin chữ không phải kéo theo dữ liệu nét.
 - Chỉ tạo dòng cho 8.009 chữ có dữ liệu. Chữ không có dòng thì UI vẫn chạy như hiện nay.
-- `has_medians` đánh dấu 305 chữ cần bù dữ liệu.
+- `has_medians` đánh dấu 305 chữ cần bù dữ liệu. Ở DB cũ chúng là mảng đường nét trần, migration chuyển thành `{"strokes": [...]}` để `data.strokes` luôn tồn tại.
 - `source`: `hanzii` / `hanzi_writer_data` / `manual`.
 - API `/api/kanji/:char` vẫn trả `strokesSvg` cùng định dạng, nên UI không phải sửa.
 - Đề xuất ở Phase 7: thêm endpoint `/api/strokes?chars=互联网`. Một request lấy nét cho cả từ (hiện từ 4 chữ phải gọi 4 lần), kèm cache dài hạn vì dữ liệu nét không đổi.
@@ -298,7 +298,8 @@ Phần dùng chung lưu ở `group.shared`. Nhóm có thể trỏ tới `passage
 | Lục thư 20 kiểu viết, có `&amp;` | 11.906 | Quy về `formation`, `formation2` |
 | Thành phần Ý/Âm chưa có trong `kanji` | 21 | Thêm dòng `pending` |
 | Chữ trong vocab chưa có trong `kanji` | 7 | Thêm dòng `pending` |
-| Dữ liệu nét thiếu `medians` | 305 | Đánh dấu `has_medians = 0` |
+| Dữ liệu nét là mảng trần, thiếu `medians` | 305 | Chuyển thành `{"strokes": [...]}`, đánh dấu `has_medians = 0` |
+| Dòng `kanji` hỏng (`\uFFFD`+"ya", thực chất là 牙) | 1 | Bỏ; 牙 đã có dòng đúng |
 | Bài khóa có 2 danh mục | 1 | Chọn 1 |
 | Thiếu bản dịch câu, nghĩa vi cho từ Mandarin Bean, Ý/Âm cho 11.263 chữ | — | Phase 9 (AI + người duyệt) |
 

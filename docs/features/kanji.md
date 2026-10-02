@@ -95,7 +95,7 @@ Số liệu nét viết (README §2.1, DESIGN §4.1, đo 2026-10-01):
 ### HanziWriter
 - Thẻ: `strokeColor #333333`, `outlineColor rgba(0,0,0,0.12)`, `drawingColor #e01a3c`, `delayBetweenStrokes 200`, `strokeAnimationSpeed 1.1`, `padding 6` (`page.tsx:94-99`).
 - Panel: 120 px, `padding 10`, `strokeAnimationSpeed 1`, **không truyền `charDataLoader`** (`page.tsx:167-171`).
-- Chữ thiếu `medians` (305): vẫn truyền vào HanziWriter; hoạt ảnh có thể sai (theo DESIGN §4.1; chưa kiểm thử trên UI).
+- 305 chữ "thiếu `medians`" thực chất lưu dạng **mảng đường nét trần**, không phải object `{strokes, medians}` mà HanziWriter cần, nên khả năng cao là không vẽ được (chưa kiểm thử trên UI). Không chữ nào trong số này nằm trong nội dung học (xác minh 2026-10-02).
 
 ### Crawl hàng loạt (`scripts/crawl-hanzii.mjs`)
 Xem Script liên quan.
