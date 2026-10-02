@@ -140,6 +140,7 @@ interface KanjiData {
   popular: number | null; pos: string | null;
   meansTdpt: string[]; meansTg: string[]; meansTdtd: string[];
   strokesSvg: string | null; botu: BotuPart[] | null;
+  botuSource: 'claude' | null;
 }
 
 function KanjiPanel({ char, onClose }: { char: string; onClose: () => void }) {
@@ -234,7 +235,12 @@ function KanjiPanel({ char, onClose }: { char: string; onClose: () => void }) {
           </div>
           {data.botu && data.botu.length > 0 && (
             <div>
-              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--ash-light)', marginBottom: 8 }}>Phân tích bộ thủ</div>
+              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--ash-light)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                Phân tích bộ thủ
+                {data.botuSource === 'claude' && (
+                  <span style={{ fontSize: 8, letterSpacing: '0.08em', color: 'var(--gold)', border: '1px solid var(--gold)', borderRadius: 3, padding: '1px 5px' }}>Claude</span>
+                )}
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {data.botu.map((part, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>

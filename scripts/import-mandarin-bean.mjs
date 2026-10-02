@@ -70,7 +70,9 @@ const insert = db.prepare(`
     categories=excluded.categories,
     audio_url=excluded.audio_url,
     content=excluded.content,
-    content_text=excluded.content_text
+    content_text=excluded.content_text,
+    vocab_count=NULL,
+    sentence_count=NULL
 `);
 
 const insertMany = db.transaction((rows) => {

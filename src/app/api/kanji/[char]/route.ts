@@ -112,6 +112,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cha
     meansTg: row.means_tg ? JSON.parse(row.means_tg) : [],
     meansTdtd,
     strokesSvg: row.strokes_svg ? JSON.parse(row.strokes_svg) : null,
-    botu: row.botu ? JSON.parse(row.botu) : null,
+    botu: (row.botu_claude || row.botu) ? JSON.parse(row.botu_claude || row.botu!) : null,
+    botuSource: row.botu_claude ? 'claude' as const : row.botu ? 'claude' as const : null,
   });
 }

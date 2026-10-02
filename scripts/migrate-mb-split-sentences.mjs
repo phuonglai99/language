@@ -124,7 +124,7 @@ for (const change of changes.filter((c) => SAMPLE_SLUGS.has(c.slug))) {
 
 if (APPLY) {
   const update = db.prepare(
-    'UPDATE mb_lessons SET content = ?, content_text = ?, sentence_timestamps = NULL WHERE slug = ?',
+    'UPDATE mb_lessons SET content = ?, content_text = ?, sentence_timestamps = NULL, vocab_count = NULL, sentence_count = NULL WHERE slug = ?',
   );
   const applyChanges = db.transaction((items) => {
     for (const item of items) {

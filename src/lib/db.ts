@@ -25,6 +25,7 @@ function getDb(): Database.Database {
       );
     `);
     try { _db.exec('ALTER TABLE lessons ADD COLUMN topic TEXT'); } catch { /* already exists */ }
+    ensureKanjiClaudeColumn(_db);
   }
   return _db;
 }
@@ -87,12 +88,63 @@ export interface KanjiRow {
   means_tdtd: string | null;
   strokes_svg: string | null;
   botu: string | null;
+  /** Claude Ý/âm/độc decomposition. Independent of Hanzii `radical`. */
+  botu_claude: string | null;
+}
+
+let _claudeBotuBackfilled = false;
+
+function kanjiTableExists(db: Database.Database): boolean {
+  return !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='kanji'").get();
+}
+
+function ensureKanjiClaudeColumn(db: Database.Database): void {
+  if (!kanjiTableExists(db)) return;
+  try { db.exec('ALTER TABLE kanji ADD COLUMN botu TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE kanji ADD COLUMN botu_claude TEXT'); } catch { /* already exists */ }
+  if (_claudeBotuBackfilled) return;
+  _claudeBotuBackfilled = true;
+  backfillKanjiBotuClaude(db);
+}
+
+/**
+ * Seed `botu_claude` from existing Claude output: leftover `kanji.botu` rows,
+ * then per-character blocks inside lesson vocab JSON. Never overwrites a
+ * value already in `botu_claude` — that's the column to clean later.
+ */
+function backfillKanjiBotuClaude(db: Database.Database): void {
+  db.exec(`
+    UPDATE kanji SET botu_claude = botu
+    WHERE (botu_claude IS NULL OR botu_claude = '')
+      AND botu IS NOT NULL AND botu != '' AND botu != 'null'
+  `);
+
+  const update = db.prepare(
+    `UPDATE kanji SET botu_claude = ?
+     WHERE char = ? AND (botu_claude IS NULL OR botu_claude = '')`
+  );
+  const lessons = db.prepare('SELECT data FROM lessons').all() as { data: string }[];
+  db.transaction(() => {
+    for (const row of lessons) {
+      let vocab: { botu?: { char?: string; parts?: unknown }[] }[] = [];
+      try { vocab = (JSON.parse(row.data) as { vocab?: typeof vocab }).vocab ?? []; } catch { continue; }
+      for (const v of vocab) {
+        for (const block of v.botu ?? []) {
+          const ch = block.char?.trim();
+          if (!ch || !Array.isArray(block.parts) || block.parts.length === 0) continue;
+          update.run(JSON.stringify(block.parts), ch);
+        }
+      }
+    }
+  })();
 }
 
 export function getKanji(char: string): KanjiRow | null {
   const db = getDb();
+  ensureKanjiClaudeColumn(db);
+  if (!kanjiTableExists(db)) return null;
   const row = db.prepare(
-    'SELECT char, cn_vi, pinyin, strokes, radical, lucthu, hinhthai, netbut, popular, means_tdpt, means_tg, means_tdtd, strokes_svg, botu FROM kanji WHERE char = ?'
+    'SELECT char, cn_vi, pinyin, strokes, radical, lucthu, hinhthai, netbut, popular, means_tdpt, means_tg, means_tdtd, strokes_svg, botu, botu_claude FROM kanji WHERE char = ?'
   ).get(char) as KanjiRow | undefined;
   return row ?? null;
 }
@@ -109,13 +161,12 @@ export function saveKanji(data: {
       char TEXT PRIMARY KEY, cn_vi TEXT, pinyin TEXT, strokes INTEGER,
       radical TEXT, lucthu TEXT, hinhthai TEXT, netbut TEXT, popular INTEGER,
       means_tdpt TEXT, means_tg TEXT, means_tdtd TEXT, strokes_svg TEXT,
-      botu TEXT, crawled_at TEXT NOT NULL
+      botu TEXT, botu_claude TEXT, crawled_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS kanji_tmp_check (x INTEGER);
     DROP TABLE IF EXISTS kanji_tmp_check;
   `);
-  // Ensure botu column exists (migrating existing DBs)
-  try { db.exec('ALTER TABLE kanji ADD COLUMN botu TEXT'); } catch { /* already exists */ }
+  ensureKanjiClaudeColumn(db);
   db.prepare(`
     INSERT INTO kanji
       (char, cn_vi, pinyin, strokes, radical, lucthu, hinhthai, netbut, popular, means_tdpt, means_tg, means_tdtd, strokes_svg, botu, crawled_at)
@@ -139,12 +190,15 @@ export function saveKanji(data: {
   );
 }
 
+/** Writes Claude decomposition into `botu_claude`. Does not touch Hanzii `radical`. */
 export function updateKanjiBotu(char: string, botu: import('@/types').BotuPart[]): void {
   const db = getDb();
-  try { db.exec('ALTER TABLE kanji ADD COLUMN botu TEXT'); } catch { /* already exists */ }
+  ensureKanjiClaudeColumn(db);
+  const json = JSON.stringify(botu);
   db.prepare(
-    'INSERT INTO kanji (char, botu, crawled_at) VALUES (?, ?, ?) ON CONFLICT(char) DO UPDATE SET botu=excluded.botu'
-  ).run(char, JSON.stringify(botu), new Date().toISOString());
+    `INSERT INTO kanji (char, botu_claude, crawled_at) VALUES (?, ?, ?)
+     ON CONFLICT(char) DO UPDATE SET botu_claude=excluded.botu_claude`
+  ).run(char, json, new Date().toISOString());
 }
 
 // ── Mandarin Bean reading lessons ────────────────────────────────────────────
@@ -177,7 +231,15 @@ export interface MBLesson {
   sentence_timestamps?: SentenceTimestamp[] | null;
 }
 
+/** DDL is idempotent but not free; run it once per connection. */
+const mbSchemaReady = new WeakSet<Database.Database>();
+
 function ensureMBTable(db: Database.Database) {
+  if (mbSchemaReady.has(db)) {
+    // Counts may still be missing: scripts write rows behind our back.
+    backfillMBCounts(db);
+    return;
+  }
   db.exec(`
     CREATE TABLE IF NOT EXISTS mb_lessons (
       slug TEXT PRIMARY KEY,
@@ -190,11 +252,39 @@ function ensureMBTable(db: Database.Database) {
       audio_url TEXT,
       content TEXT NOT NULL,
       content_text TEXT NOT NULL,
-      sentence_timestamps TEXT
+      sentence_timestamps TEXT,
+      vocab_count INTEGER,
+      sentence_count INTEGER
     );
     CREATE INDEX IF NOT EXISTS mb_lessons_hsk ON mb_lessons(hsk_level);
   `);
-  try { db.exec('ALTER TABLE mb_lessons ADD COLUMN sentence_timestamps TEXT'); } catch { /* already exists */ }
+  for (const col of ['sentence_timestamps TEXT', 'vocab_count INTEGER', 'sentence_count INTEGER']) {
+    try { db.exec(`ALTER TABLE mb_lessons ADD COLUMN ${col}`); } catch { /* already exists */ }
+  }
+  // Partial index keeps the "any rows missing counts?" probe O(1) instead of a
+  // full table scan (each row carries ~17KB of content JSON).
+  db.exec('CREATE INDEX IF NOT EXISTS mb_lessons_missing_counts ON mb_lessons(slug) WHERE vocab_count IS NULL');
+  mbSchemaReady.add(db);
+  backfillMBCounts(db);
+}
+
+/**
+ * List views only need per-lesson vocab/sentence counts, which used to be
+ * derived by parsing every lesson's content JSON on every request. The counts
+ * are cached in columns instead; rows written by the crawler/import scripts
+ * arrive with NULL counts and are filled in here, once.
+ */
+function backfillMBCounts(db: Database.Database) {
+  const pending = db.prepare('SELECT slug, content FROM mb_lessons WHERE vocab_count IS NULL').all() as { slug: string; content: string }[];
+  if (pending.length === 0) return;
+  const update = db.prepare('UPDATE mb_lessons SET vocab_count = ?, sentence_count = ? WHERE slug = ?');
+  db.transaction(() => {
+    for (const row of pending) {
+      let content: MBLessonWord[][] = [];
+      try { content = JSON.parse(row.content) as MBLessonWord[][]; } catch { /* keep empty */ }
+      update.run(countLessonVocab(content), countContentSentences(content), row.slug);
+    }
+  })();
 }
 
 export function saveMBLesson(lesson: MBLesson): void {
@@ -202,8 +292,8 @@ export function saveMBLesson(lesson: MBLesson): void {
   ensureMBTable(db);
   db.prepare(`
     INSERT INTO mb_lessons
-      (slug, url, title_en, title_zh_simplified, title_zh_traditional, hsk_level, categories, audio_url, content, content_text)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (slug, url, title_en, title_zh_simplified, title_zh_traditional, hsk_level, categories, audio_url, content, content_text, vocab_count, sentence_count)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(slug) DO UPDATE SET
       url=excluded.url,
       title_en=excluded.title_en,
@@ -213,20 +303,25 @@ export function saveMBLesson(lesson: MBLesson): void {
       categories=excluded.categories,
       audio_url=excluded.audio_url,
       content=excluded.content,
-      content_text=excluded.content_text
+      content_text=excluded.content_text,
+      vocab_count=excluded.vocab_count,
+      sentence_count=excluded.sentence_count
   `).run(
     lesson.slug, lesson.url, lesson.title_en,
     lesson.title_zh_simplified, lesson.title_zh_traditional,
     lesson.hsk_level, JSON.stringify(lesson.categories),
     lesson.audio_url ?? null,
     JSON.stringify(lesson.content), lesson.content_text,
+    countLessonVocab(lesson.content), countContentSentences(lesson.content),
   );
 }
 
 export function getMBLesson(slug: string): MBLesson | null {
   const db = getDb();
   ensureMBTable(db);
-  const row = db.prepare('SELECT * FROM mb_lessons WHERE slug = ?').get(slug) as Record<string, unknown> | undefined;
+  const row = db.prepare(
+    'SELECT slug, url, title_en, title_zh_simplified, title_zh_traditional, hsk_level, categories, audio_url, content, content_text, sentence_timestamps FROM mb_lessons WHERE slug = ?'
+  ).get(slug) as Record<string, unknown> | undefined;
   if (!row) return null;
   let sentence_timestamps: SentenceTimestamp[] | null = null;
   if (typeof row.sentence_timestamps === 'string' && row.sentence_timestamps) {
@@ -240,33 +335,126 @@ export function getMBLesson(slug: string): MBLesson | null {
   };
 }
 
-export type MBLessonListItem = Omit<MBLesson, 'content'> & { vocabCount: number };
+/** Card-sized lesson: no `content` / `content_text`, so lists stay cheap. */
+export type MBLessonListItem = Omit<MBLesson, 'content' | 'content_text' | 'sentence_timestamps'> & { vocabCount: number };
+
+const MB_LIST_COLUMNS =
+  'slug, url, title_en, title_zh_simplified, title_zh_traditional, hsk_level, categories, audio_url, COALESCE(vocab_count, 0) AS vocabCount';
 
 function mapMBListRow(r: Record<string, unknown>): MBLessonListItem {
-  const { content, categories, ...rest } = r;
+  const { categories, ...rest } = r;
   return {
-    ...(rest as Omit<MBLesson, 'categories' | 'content'>),
+    ...(rest as Omit<MBLessonListItem, 'categories'>),
     categories: JSON.parse(categories as string),
-    vocabCount: vocabCountFromContentJson(content),
   };
 }
 
-export function getMBLessonsByHsk(level: number): MBLessonListItem[] {
+export interface MBLessonFilters {
+  /** HSK level, or null/undefined for every level. */
+  hsk?: number | null;
+  /** Free-text query matched against titles and categories. */
+  q?: string | null;
+  /** 'checked' | 'uncheck' | 'unchecked' — alignment review status. */
+  status?: string | null;
+  /** Also match `q` against the lesson body (dictation search). */
+  searchContentText?: boolean;
+}
+
+/**
+ * Filters in SQL rather than in JS so a filtered list never loads the rows it
+ * is about to discard.
+ */
+export function queryMBLessons(filters: MBLessonFilters = {}): MBLessonListItem[] {
   const db = getDb();
   ensureMBTable(db);
+
+  const where: string[] = [];
+  const args: unknown[] = [];
+
+  if (filters.hsk != null && Number.isFinite(filters.hsk)) {
+    where.push('hsk_level = ?');
+    args.push(filters.hsk);
+  }
+
+  const status = filters.status?.toLowerCase();
+  if (status === 'checked') {
+    where.push(`categories LIKE '%"Checked"%'`);
+  } else if (status === 'uncheck' || status === 'unchecked') {
+    where.push(`categories LIKE '%"Uncheck"%'`);
+  }
+
+  const q = filters.q?.trim();
+  if (q) {
+    const like = `%${q.replace(/[\\%_]/g, m => '\\' + m)}%`;
+    const fields = ['title_en', 'title_zh_simplified', 'categories'];
+    if (filters.searchContentText) fields.push('content_text');
+    where.push(`(${fields.map(f => `${f} LIKE ? ESCAPE '\\'`).join(' OR ')})`);
+    args.push(...fields.map(() => like));
+  }
+
   const rows = db.prepare(
-    'SELECT slug, url, title_en, title_zh_simplified, title_zh_traditional, hsk_level, categories, audio_url, content_text, content FROM mb_lessons WHERE hsk_level = ? ORDER BY slug'
-  ).all(level) as Record<string, unknown>[];
+    `SELECT ${MB_LIST_COLUMNS} FROM mb_lessons${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY hsk_level, slug`
+  ).all(...args) as Record<string, unknown>[];
   return rows.map(mapMBListRow);
 }
 
-export function getAllMBLessons(): MBLessonListItem[] {
+export function getMBLessonsByHsk(level: number): MBLessonListItem[] {
+  return queryMBLessons({ hsk: level });
+}
+
+export type MBLessonNavItem = {
+  slug: string;
+  title_en: string;
+  title_zh_simplified: string;
+};
+
+export interface MBLessonNeighbors {
+  prev: MBLessonNavItem | null;
+  next: MBLessonNavItem | null;
+  index: number;
+  total: number;
+}
+
+/** Previous/next lesson in the same HSK level, ordered like the reading list. */
+export function getAdjacentMBLessons(slug: string, hskLevel: number): MBLessonNeighbors {
   const db = getDb();
   ensureMBTable(db);
   const rows = db.prepare(
-    'SELECT slug, url, title_en, title_zh_simplified, title_zh_traditional, hsk_level, categories, audio_url, content_text, content FROM mb_lessons ORDER BY hsk_level, slug'
-  ).all() as Record<string, unknown>[];
-  return rows.map(mapMBListRow);
+    'SELECT slug, title_en, title_zh_simplified FROM mb_lessons WHERE hsk_level = ? ORDER BY slug',
+  ).all(hskLevel) as MBLessonNavItem[];
+  const i = rows.findIndex(r => r.slug === slug);
+  if (i < 0) return { prev: null, next: null, index: 0, total: rows.length };
+  return {
+    prev: i > 0 ? rows[i - 1] : null,
+    next: i < rows.length - 1 ? rows[i + 1] : null,
+    index: i + 1,
+    total: rows.length,
+  };
+}
+
+export function getAllMBLessons(): MBLessonListItem[] {
+  return queryMBLessons();
+}
+
+export interface MBLessonCounts {
+  total: number;
+  byHsk: Record<number, number>;
+}
+
+/** Counts only — what the sidebar needs, without shipping 700+ lesson rows. */
+export function getMBLessonCounts(): MBLessonCounts {
+  const db = getDb();
+  ensureMBTable(db);
+  const rows = db.prepare(
+    'SELECT hsk_level, COUNT(*) AS n FROM mb_lessons GROUP BY hsk_level ORDER BY hsk_level'
+  ).all() as { hsk_level: number; n: number }[];
+  const byHsk: Record<number, number> = {};
+  let total = 0;
+  for (const r of rows) {
+    byHsk[r.hsk_level] = r.n;
+    total += r.n;
+  }
+  return { total, byHsk };
 }
 
 export function getMBLessonCount(): number {
@@ -301,11 +489,6 @@ export function countLessonVocab(content: MBLessonWord[][]): number {
   return seen.size;
 }
 
-function vocabCountFromContentJson(raw: unknown): number {
-  if (typeof raw !== 'string' || !raw) return 0;
-  try { return countLessonVocab(JSON.parse(raw) as MBLessonWord[][]); } catch { return 0; }
-}
-
 function countContentSentences(content: MBLessonWord[][]): number {
   return content.filter(para =>
     para.some(w => w.hanzi.trim() && !/^[\s，。？！、：；""''「」【】（）…—·]+$/.test(w.hanzi)),
@@ -316,7 +499,7 @@ export function getMBAlignSummaries(): MBAlignSummary[] {
   const db = getDb();
   ensureMBTable(db);
   const rows = db.prepare(
-    'SELECT slug, title_en, title_zh_simplified, hsk_level, audio_url, content, sentence_timestamps FROM mb_lessons ORDER BY hsk_level, slug',
+    'SELECT slug, title_en, title_zh_simplified, hsk_level, audio_url, COALESCE(sentence_count, 0) AS sentence_count, sentence_timestamps FROM mb_lessons ORDER BY hsk_level, slug',
   ).all() as Record<string, unknown>[];
 
   return rows.map(r => {
@@ -331,9 +514,7 @@ export function getMBAlignSummaries(): MBAlignSummary[] {
       sentenceCount = timestamps.length;
       unmatchedCount = timestamps.filter(t => t.start == null || t.end == null).length;
     } else {
-      try {
-        sentenceCount = countContentSentences(JSON.parse(r.content as string) as MBLessonWord[][]);
-      } catch { sentenceCount = 0; }
+      sentenceCount = r.sentence_count as number;
       unmatchedCount = sentenceCount;
     }
     return {
@@ -360,8 +541,8 @@ export function saveMBLessonAlignment(
   if (!exists) return false;
   const tsJson = JSON.stringify(timestamps);
   if (content) {
-    db.prepare('UPDATE mb_lessons SET sentence_timestamps = ?, content = ? WHERE slug = ?')
-      .run(tsJson, JSON.stringify(content), slug);
+    db.prepare('UPDATE mb_lessons SET sentence_timestamps = ?, content = ?, vocab_count = ?, sentence_count = ? WHERE slug = ?')
+      .run(tsJson, JSON.stringify(content), countLessonVocab(content), countContentSentences(content), slug);
   } else {
     db.prepare('UPDATE mb_lessons SET sentence_timestamps = ? WHERE slug = ?')
       .run(tsJson, slug);

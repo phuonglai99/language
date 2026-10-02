@@ -39,8 +39,9 @@ function lessonHref(section: string, id: string): string {
   return `/lesson/${id}`;
 }
 
-type MBLessonMeta = {
-  slug: string; title_en: string; title_zh_simplified: string; hsk_level: number;
+type MBLessonCounts = {
+  total: number;
+  byHsk: Record<number, number>;
 };
 
 const SIDEBAR_W_DEFAULT = 272;
@@ -65,7 +66,7 @@ export default function GlobalShell() {
   const dragStartX = useRef(0);
   const dragStartW = useRef(SIDEBAR_W_DEFAULT);
   const [lessons, setLessons] = useState<LessonMeta[]>([]);
-  const [mbLessons, setMbLessons] = useState<MBLessonMeta[]>([]);
+  const [mbCounts, setMbCounts] = useState<MBLessonCounts>({ total: 0, byHsk: {} });
   const [grammarCounts, setGrammarCounts] = useState<Record<string, number>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ vocab: true, grammar: true });
   const [subExpanded, setSubExpanded] = useState<Record<string, boolean>>({ 'grammar-HSK2': true });
@@ -78,7 +79,8 @@ export default function GlobalShell() {
 
   useEffect(() => {
     fetch('/api/lessons').then(r => r.json()).then(d => setLessons(d.lessons ?? []));
-    fetch('/api/reading').then(r => r.json()).then(d => setMbLessons(d.lessons ?? []));
+    // Counts only: the sidebar shows totals, so there is no need to pull every lesson.
+    fetch('/api/reading/counts').then(r => r.json()).then(d => setMbCounts({ total: d.total ?? 0, byHsk: d.byHsk ?? {} }));
     fetch('/api/grammar').then(r => r.json()).then(d => {
       const map: Record<string, number> = {};
       for (const row of (d.counts ?? []) as { hsk: string; count: number }[]) map[row.hsk] = row.count;
@@ -289,23 +291,25 @@ export default function GlobalShell() {
                   {sec.key === 'reading' ? (
                     // Reading: link to /reading with HSK sub-groups
                     <div>
-                      <Link href="/reading" onClick={closeAll}
+                      {/* prefetch off: /reading renders every lesson card, too big to
+                          pull down speculatively from the sidebar. */}
+                      <Link href="/reading" prefetch={false} onClick={closeAll}
                         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 16px 4px 52px', textDecoration: 'none', color: 'rgba(200,191,176,0.6)', fontSize: 11, fontFamily: 'JetBrains Mono, monospace', transition: 'color 0.1s' }}
                         onMouseEnter={e => (e.currentTarget.style.color = '#f5f1e8')}
                         onMouseLeave={e => (e.currentTarget.style.color = 'rgba(200,191,176,0.6)')}>
-                        Tất cả {mbLessons.length} bài →
+                        Tất cả {mbCounts.total} bài →
                       </Link>
                       {[1,2,3,4,5].map(lvl => {
-                        const grp = mbLessons.filter(l => l.hsk_level === lvl);
-                        if (!grp.length) return null;
+                        const count = mbCounts.byHsk[lvl] ?? 0;
+                        if (!count) return null;
                         const lvlColor = LEVEL_COLOR[`HSK${lvl}`] ?? 'var(--ash-light)';
                         return (
-                          <Link key={lvl} href={`/reading?hsk=${lvl}`} onClick={closeAll}
+                          <Link key={lvl} href={`/reading?hsk=${lvl}`} prefetch={false} onClick={closeAll}
                             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 16px 4px 52px', textDecoration: 'none', transition: 'background 0.1s' }}
                             onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
                             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                             <span style={{ fontSize: 9.5, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.12em', color: lvlColor, textTransform: 'uppercase', fontWeight: 700 }}>HSK {lvl}</span>
-                            <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: 'rgba(200,191,176,0.3)', marginLeft: 'auto' }}>{grp.length} bài →</span>
+                            <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: 'rgba(200,191,176,0.3)', marginLeft: 'auto' }}>{count} bài →</span>
                           </Link>
                         );
                       })}

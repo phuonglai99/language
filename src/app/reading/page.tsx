@@ -1,23 +1,7 @@
-'use client';
-import { useState, useEffect, useTransition } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
-
-type MBLesson = {
-  slug: string; url: string;
-  title_en: string; title_zh_simplified: string; title_zh_traditional: string;
-  hsk_level: number; categories: string[];
-  audio_url: string | null; content_text: string;
-  vocabCount?: number;
-};
-
-const LEVEL_COLOR: Record<number, string> = {
-  1: '#3a8a5c', 2: '#4a72a0', 3: '#a0720a', 4: '#c8392b', 5: '#7a3db0',
-};
-
-const HSK_LEVELS = [1, 2, 3, 4, 5];
-type AlignmentStatus = 'Checked' | 'Uncheck';
+import { queryMBLessons } from '@/lib/db';
+import { ReadingBreadcrumb } from './ReadingBreadcrumb';
+import { ReadingSearch, ReadingFilterPills, type AlignmentStatus } from './ReadingFilters';
 
 function getAlignmentStatus(categories: string[]): AlignmentStatus | null {
   if (categories.includes('Uncheck')) return 'Uncheck';
@@ -25,7 +9,7 @@ function getAlignmentStatus(categories: string[]): AlignmentStatus | null {
   return null;
 }
 
-function getAlignmentStatusParam(status: string | null): AlignmentStatus | null {
+function getAlignmentStatusParam(status: string | undefined): AlignmentStatus | null {
   const normalized = status?.toLowerCase();
   if (normalized === 'checked') return 'Checked';
   if (normalized === 'uncheck' || normalized === 'unchecked') return 'Uncheck';
@@ -36,75 +20,28 @@ function isAlignmentStatus(cat: string) {
   return cat === 'Checked' || cat === 'Uncheck';
 }
 
-function CategoryBadge({ cat }: { cat: string }) {
-  return (
-    <span style={{
-      display: 'inline-block', padding: '2px 8px', borderRadius: 20,
-      background: '#f3f4f6',
-      fontSize: 9.5, color: '#6b7280', fontFamily: 'JetBrains Mono, monospace',
-      letterSpacing: '0.06em', whiteSpace: 'nowrap',
-    }}>
-      {cat}
-    </span>
-  );
-}
-
 function AlignmentStatusBadge({ status }: { status: AlignmentStatus }) {
-  const isChecked = status === 'Checked';
   return (
-    <span style={{
-      display: 'inline-block', padding: '2px 8px', borderRadius: 20,
-      background: isChecked ? 'rgba(22,163,74,0.12)' : 'rgba(200,57,43,0.12)',
-      border: `1px solid ${isChecked ? 'rgba(22,163,74,0.32)' : 'rgba(200,57,43,0.32)'}`,
-      fontSize: 9.5, color: isChecked ? '#16a34a' : '#c8392b',
-      fontFamily: 'JetBrains Mono, monospace', fontWeight: 700,
-      letterSpacing: '0.06em', whiteSpace: 'nowrap',
-    }}>
+    <span className={`align-badge ${status === 'Checked' ? 'align-badge-checked' : 'align-badge-uncheck'}`}>
       {status}
     </span>
   );
 }
 
-function ReadingPageInner() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const hsk = searchParams.get('hsk') ? Number(searchParams.get('hsk')) : null;
-  const q = searchParams.get('q') ?? '';
-  const status = getAlignmentStatusParam(searchParams.get('status'));
+interface Props {
+  searchParams: Promise<{ hsk?: string; q?: string; status?: string }>;
+}
 
-  const [lessons, setLessons] = useState<MBLesson[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchVal, setSearchVal] = useState(q);
-  const [, startTransition] = useTransition();
+export default async function ReadingPage({ searchParams }: Props) {
+  const params = await searchParams;
+  const hskParam = params.hsk ? Number(params.hsk) : null;
+  const hsk = hskParam && Number.isFinite(hskParam) ? hskParam : null;
+  const q = params.q ?? '';
+  const status = getAlignmentStatusParam(params.status);
 
-  useEffect(() => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    if (hsk) params.set('hsk', String(hsk));
-    if (q) params.set('q', q);
-    if (status) params.set('status', status);
-    fetch(`/api/reading?${params}`)
-      .then(r => r.json())
-      .then(d => { setLessons(d.lessons ?? []); setLoading(false); });
-  }, [hsk, q, status]);
-
-  function setFilter(nextHsk: number | null, nextQ?: string, nextStatus = status) {
-    const params = new URLSearchParams();
-    if (nextHsk) params.set('hsk', String(nextHsk));
-    const qVal = nextQ !== undefined ? nextQ : q;
-    if (qVal) params.set('q', qVal);
-    if (nextStatus) params.set('status', nextStatus);
-    startTransition(() => router.replace(`/reading?${params}`));
-  }
-
-  function handleSearch(val: string) {
-    setSearchVal(val);
-    const params = new URLSearchParams();
-    if (hsk) params.set('hsk', String(hsk));
-    if (val) params.set('q', val);
-    if (status) params.set('status', status);
-    startTransition(() => router.replace(`/reading?${params}`));
-  }
+  // Read straight from SQLite while rendering: no client fetch round-trip, and
+  // the filtering happens in the query rather than over the whole table.
+  const lessons = queryMBLessons({ hsk, q, status });
 
   return (
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
@@ -112,27 +49,11 @@ function ReadingPageInner() {
       <header style={{ background: '#1e3a8a', position: 'sticky', top: 0, zIndex: 50, boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>
         <div style={{ maxWidth: 1080, margin: '0 auto', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Link href="/" style={{ textDecoration: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 13, marginRight: 4, transition: 'color 0.15s' }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}>← </Link>
+            <Link href="/" className="reading-back-link" style={{ textDecoration: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 13, marginRight: 4, transition: 'color 0.15s' }}>← </Link>
             <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 20, fontWeight: 700, color: '#fff' }}>读课文</span>
             <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>Đọc bài khoá</span>
           </div>
-          {/* Search */}
-          <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
-            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'rgba(200,191,176,0.5)', fontSize: 13, pointerEvents: 'none' }}>🔍</span>
-            <input
-              value={searchVal}
-              onChange={e => handleSearch(e.target.value)}
-              placeholder="Tìm bài đọc…"
-              style={{
-                width: '100%', boxSizing: 'border-box', padding: '7px 10px 7px 32px',
-                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: 7, color: '#f5f1e8', fontSize: 13,
-                fontFamily: 'Be Vietnam Pro, sans-serif', outline: 'none',
-              }}
-            />
-          </div>
+          <ReadingSearch hsk={hsk} q={q} status={status} />
           <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(200,191,176,0.5)', whiteSpace: 'nowrap' }}>
             <strong style={{ color: '#f5f1e8' }}>{lessons.length}</strong> bài
           </span>
@@ -140,133 +61,46 @@ function ReadingPageInner() {
       </header>
 
       <main style={{ maxWidth: 1080, margin: '0 auto', padding: '24px 24px' }}>
-        {/* HSK filter pills */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 24 }}>
-          <button
-            onClick={() => setFilter(null)}
-            style={{
-              padding: '6px 16px', borderRadius: 20, border: `1.5px solid ${hsk === null ? 'var(--ink)' : 'var(--border)'}`,
-              background: hsk === null ? 'var(--ink)' : 'transparent',
-              color: hsk === null ? 'var(--paper)' : 'var(--ash)',
-              fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace',
-              transition: 'all 0.15s',
-            }}
-          >
-            Tất cả
-          </button>
-          {HSK_LEVELS.map(lvl => (
-            <button
-              key={lvl}
-              onClick={() => setFilter(hsk === lvl ? null : lvl)}
-              style={{
-                padding: '6px 16px', borderRadius: 20,
-                border: `1.5px solid ${hsk === lvl ? LEVEL_COLOR[lvl] : 'var(--border)'}`,
-                background: hsk === lvl ? LEVEL_COLOR[lvl] : 'transparent',
-                color: hsk === lvl ? '#fff' : 'var(--ash)',
-                fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace',
-                transition: 'all 0.15s',
-              }}
-            >
-              HSK {lvl}
-            </button>
-          ))}
-          <div style={{ flex: 1 }} />
-          {(['Checked', 'Uncheck'] as AlignmentStatus[]).map(nextStatus => {
-            const active = status === nextStatus;
-            const isChecked = nextStatus === 'Checked';
-            const color = isChecked ? '#16a34a' : '#c8392b';
-            return (
-              <button
-                key={nextStatus}
-                onClick={() => setFilter(hsk, undefined, active ? null : nextStatus)}
-                style={{
-                  padding: '6px 14px', borderRadius: 20,
-                  border: `1.5px solid ${active ? color : 'var(--border)'}`,
-                  background: active ? color : 'transparent',
-                  color: active ? '#fff' : 'var(--ash)',
-                  fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  fontFamily: 'JetBrains Mono, monospace',
-                  transition: 'all 0.15s',
-                }}
-              >
-                {nextStatus}
-              </button>
-            );
-          })}
-        </div>
+        {(hsk || q) && (
+          <ReadingBreadcrumb items={[
+            { href: '/reading', label: 'Đọc bài khoá' },
+            ...(hsk ? [{ href: q ? `/reading?hsk=${hsk}` : undefined, label: `HSK ${hsk}` }] : []),
+            ...(q ? [{ label: q }] : []),
+          ]} />
+        )}
+        <ReadingFilterPills hsk={hsk} q={q} status={status} />
 
         {/* Grid */}
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>Đang tải…</div>
-        ) : lessons.length === 0 ? (
+        {lessons.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)' }}>Không tìm thấy bài nào.</div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+          <div className="lesson-grid">
             {lessons.map(l => {
               const alignmentStatus = getAlignmentStatus(l.categories);
               const displayCategories = l.categories.filter(cat => !isAlignmentStatus(cat)).slice(0, 3);
               return (
-              <Link
-                key={l.slug}
-                href={`/reading/${l.slug}`}
-                style={{ textDecoration: 'none' }}
-              >
-                <div
-                  style={{
-                    background: '#fff',
-                    borderRadius: 14, overflow: 'hidden',
-                    boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
-                    transition: 'box-shadow 0.15s, transform 0.15s',
-                    height: '100%', display: 'flex', flexDirection: 'column',
-                  }}
-                  onMouseEnter={e => {
-                    (e.currentTarget as HTMLDivElement).style.boxShadow = '0 6px 24px rgba(0,0,0,0.11)';
-                    (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
-                  }}
-                  onMouseLeave={e => {
-                    (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 10px rgba(0,0,0,0.06)';
-                    (e.currentTarget as HTMLDivElement).style.transform = 'none';
-                  }}
-                >
-                  {/* Color bar */}
-                  <div style={{ height: 3, background: LEVEL_COLOR[l.hsk_level] ?? 'var(--ash)' }} />
+              <Link key={l.slug} href={`/reading/${l.slug}`} prefetch={false} className="lesson-card-link">
+                <div className={`lesson-card lvl-${l.hsk_level}`}>
+                  <div className="lesson-card-bar" />
 
-                  <div style={{ padding: '14px 16px', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="lesson-card-body">
                     {/* Level + audio */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{
-                        display: 'inline-block', padding: '3px 10px', borderRadius: 20,
-                        background: (LEVEL_COLOR[l.hsk_level] ?? '#888') + '18',
-                        color: LEVEL_COLOR[l.hsk_level] ?? '#888', fontSize: 11, fontWeight: 700,
-                        fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em',
-                      }}>
-                        HSK {l.hsk_level}
-                      </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div className="lesson-card-top">
+                      <span className="lesson-level-pill">HSK {l.hsk_level}</span>
+                      <div className="lesson-card-top-right">
                         {alignmentStatus && <AlignmentStatusBadge status={alignmentStatus} />}
-                        {l.audio_url && (
-                          <span style={{ fontSize: 13, color: 'var(--ash-light)' }}>🎧</span>
-                        )}
+                        {l.audio_url && <span className="lesson-audio-icon">🎧</span>}
                       </div>
                     </div>
 
-                    {/* Chinese title */}
-                    <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 18, fontWeight: 700, color: '#111827', lineHeight: 1.3 }}>
-                      {l.title_zh_simplified}
-                    </div>
+                    <div className="lesson-card-title-zh">{l.title_zh_simplified}</div>
+                    <div className="lesson-card-title-en">{l.title_en}</div>
 
-                    {/* English title */}
-                    <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.4, flex: 1 }}>
-                      {l.title_en}
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 4, paddingBottom: 4 }}>
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        {displayCategories.map(cat => <CategoryBadge key={cat} cat={cat} />)}
+                    <div className="lesson-card-foot">
+                      <div className="lesson-card-cats">
+                        {displayCategories.map(cat => <span key={cat} className="cat-badge">{cat}</span>)}
                       </div>
-                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#6b7280', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                        {l.vocabCount ?? 0} từ
-                      </span>
+                      <span className="lesson-card-count">{l.vocabCount ?? 0} từ</span>
                     </div>
                   </div>
                 </div>
@@ -277,13 +111,5 @@ function ReadingPageInner() {
         )}
       </main>
     </div>
-  );
-}
-
-export default function ReadingPage() {
-  return (
-    <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--ash)' }}>Đang tải…</div>}>
-      <ReadingPageInner />
-    </Suspense>
   );
 }
