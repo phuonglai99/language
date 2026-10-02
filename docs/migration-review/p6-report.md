@@ -1,12 +1,12 @@
 # Báo cáo đối chiếu P6 — DB cũ ↔ DB v4
 
-Sinh bởi `npm run migrate:v4:report` lúc 2026-10-02T11:48:24.260Z.
+Sinh bởi `npm run migrate:v4:report` lúc 2026-10-02T12:00:53.971Z.
 
 ## 1. Tổng quan
 
 | | DB cũ (`lessons.db`) | DB mới (`hsk.db`) |
 |---|---|---|
-| Dung lượng | 98.0 MB | 56.7 MB |
+| Dung lượng | 98.0 MB | 56.0 MB |
 | `integrity_check` | | ok |
 | `foreign_key_check` | | không lỗi |
 

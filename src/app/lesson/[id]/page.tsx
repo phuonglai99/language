@@ -8,6 +8,7 @@ import MatchGame from './MatchGame';
 import NoteModal from '@/app/components/NoteModal';
 import { VocabListCard } from '@/app/components/VocabListCard';
 import { Pagination } from '@/app/components/Pagination';
+import { frequencyLabel } from '@/shared/hanzi';
 
 // ─── Botu renderer ────────────────────────────────────────────────────────────
 
@@ -74,7 +75,7 @@ function loadHW(): Promise<HanziWriterStatic> {
   return _hwPromise;
 }
 
-function CharStroke({ char, size = 72 }: { char: string; size?: number }) {
+function CharStroke({ char, size = 72, charData }: { char: string; size?: number; charData: unknown }) {
   const ref = useRef<HTMLDivElement>(null);
   const writerRef = useRef<{ animateCharacter(): void } | null>(null);
 
@@ -82,11 +83,6 @@ function CharStroke({ char, size = 72 }: { char: string; size?: number }) {
     let cancelled = false;
     writerRef.current = null;
     (async () => {
-      let charData: unknown = null;
-      try {
-        const res = await fetch(`/api/kanji/${encodeURIComponent(char)}`);
-        if (res.ok) { const json = await res.json(); if (json.strokesSvg) charData = json.strokesSvg; }
-      } catch { /* ignore */ }
       if (cancelled || !ref.current) return;
       const HW = await loadHW();
       if (cancelled || !ref.current) return;
@@ -101,7 +97,7 @@ function CharStroke({ char, size = 72 }: { char: string; size?: number }) {
       try { writerRef.current = HW.create(ref.current, char, opts); writerRef.current!.animateCharacter(); } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };
-  }, [char, size]);
+  }, [char, size, charData]);
 
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -123,11 +119,23 @@ function CharStroke({ char, size = 72 }: { char: string; size?: number }) {
 
 function WordStroke({ text, cardId }: { text: string; cardId: string }) {
   const chars = [...text].filter(c => c.charCodeAt(0) >= 0x4E00 && c.charCodeAt(0) <= 0x9FFF);
-  if (chars.length === 0) return null;
+  const key = chars.join('');
+  // One request for the whole word; null = not in the DB (HanziWriter then uses its CDN).
+  const [strokes, setStrokes] = useState<{ key: string; data: Record<string, unknown> } | null>(null);
+  useEffect(() => {
+    if (!key) return;
+    let cancelled = false;
+    fetch(`/api/strokes?chars=${encodeURIComponent(key)}`)
+      .then(r => (r.ok ? r.json() : { strokes: {} }))
+      .catch(() => ({ strokes: {} }))
+      .then(d => { if (!cancelled) setStrokes({ key, data: d.strokes ?? {} }); });
+    return () => { cancelled = true; };
+  }, [key]);
+  if (chars.length === 0 || strokes?.key !== key) return null;
   const size = chars.length > 3 ? 56 : chars.length > 2 ? 64 : 72;
   return (
     <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center' }}>
-      {chars.map((c, i) => <CharStroke key={`${cardId}-${i}-${c}`} char={c} size={size} />)}
+      {chars.map((c, i) => <CharStroke key={`${cardId}-${i}-${c}`} char={c} size={size} charData={strokes.data[c] ?? null} />)}
     </div>
   );
 }
@@ -139,7 +147,7 @@ interface KanjiData {
   radical: string | null; lucthu: string | null; hinhthai: string | null; netbut: string | null;
   popular: number | null; pos: string | null;
   meansTdpt: string[]; meansTg: string[]; meansTdtd: string[];
-  strokesSvg: string | null; botu: BotuPart[] | null;
+  strokesSvg: unknown; botu: BotuPart[] | null;
   botuSource: 'claude' | null;
 }
 
@@ -158,32 +166,26 @@ function KanjiPanel({ char, onClose }: { char: string; onClose: () => void }) {
 
   useEffect(() => {
     if (!data?.char || !writerRef.current) return;
-    const existing = document.getElementById('hanzi-writer-script');
-    function initWriter() {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const HW = (window as any).HanziWriter;
-      if (!HW || !writerRef.current) return;
+    let cancelled = false;
+    loadHW().then(HW => {
+      if (cancelled || !writerRef.current) return;
       writerRef.current.innerHTML = '';
-      HW.create(writerRef.current, data!.char, {
+      const opts: Record<string, unknown> = {
         width: 120, height: 120, padding: 10,
         strokeColor: '#333', outlineColor: '#ddd', drawingColor: '#e01a3c',
         showOutline: true, delayBetweenStrokes: 200, strokeAnimationSpeed: 1,
-      }).animateCharacter();
-    }
-    if (existing) { initWriter(); return; }
-    const script = document.createElement('script');
-    script.id = 'hanzi-writer-script';
-    script.src = 'https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js';
-    script.onload = initWriter;
-    document.head.appendChild(script);
+        onLoadCharDataError: () => { /* ignore */ },
+      };
+      // Stroke data from the DB; without it HanziWriter falls back to its CDN.
+      if (data.strokesSvg) opts.charDataLoader = (_c: string, onLoad: (d: unknown) => void) => onLoad(data.strokesSvg);
+      try { HW.create(writerRef.current, data.char, opts).animateCharacter(); } catch { /* ignore */ }
+    });
+    return () => { cancelled = true; };
   }, [data]);
 
   const popularLabel = (n: number | null) => {
-    if (!n) return null;
-    if (n >= 80) return { label: 'Rất cao', color: 'var(--red)' };
-    if (n >= 60) return { label: 'Cao', color: 'var(--gold)' };
-    if (n >= 40) return { label: 'Trung bình', color: 'var(--ash)' };
-    return { label: 'Thấp', color: 'var(--ash-light)' };
+    const label = frequencyLabel(n);
+    return label ? { label } : null;
   };
 
   const POS_NAMES: Record<string, string> = {

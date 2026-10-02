@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { MigrationStep } from '../index';
 import { hanChars } from '../../../src/shared/text';
+import { normalizeStrokeData, parseFormation, parseFrequency, ROLE_FROM_BOTU } from '../../../src/shared/hanzi';
 
 interface SeedRadical {
   no: number;
@@ -35,38 +36,6 @@ interface KanjiRow {
 }
 
 const SEED = path.join(__dirname, '../seed/radicals.json');
-
-const FORMATION: Record<string, string> = {
-  'tượng hình': 'pictograph',
-  'chỉ sự': 'ideograph',
-  'hội ý': 'compound',
-  'hình thanh': 'phono_semantic',
-  'giả tá': 'loan',
-  'chuyển chú': 'derivative',
-};
-/** Canonical order, so "hội ý & hình thanh" and "hình thanh & hội ý" store the same way. */
-const FORMATION_ORDER = ['pictograph', 'ideograph', 'compound', 'phono_semantic', 'loan', 'derivative'];
-
-const FREQUENCY: Record<string, number> = { 'rất thấp': 1, 'thấp': 2, 'trung bình': 3, 'cao': 4, 'rất cao': 5 };
-
-const ROLE: Record<string, string> = { y: 'meaning', am: 'sound', solo: 'self' };
-
-function parseFormation(raw: string | null): [string | null, string | null] {
-  if (!raw) return [null, null];
-  const parts = raw
-    .replace(/&amp;/g, '&')
-    .split(/&| kiêm /)
-    .map(p => p.trim())
-    .filter(Boolean)
-    .map(p => {
-      const code = FORMATION[p];
-      if (!code) throw new Error(`Unknown lục thư "${p}" in "${raw}"`);
-      return code;
-    });
-  const unique = [...new Set(parts)].sort((a, b) => FORMATION_ORDER.indexOf(a) - FORMATION_ORDER.indexOf(b));
-  if (unique.length > 2) throw new Error(`More than 2 lục thư in "${raw}"`);
-  return [unique[0] ?? null, unique[1] ?? null];
-}
 
 /** JSON array text → same text, or NULL when empty / missing. */
 function jsonArrayOrNull(raw: string | null): string | null {
@@ -139,8 +108,8 @@ export const p1Characters: MigrationStep = {
         continue;
       }
       const [formation, formation2] = parseFormation(k.lucthu);
-      const frequency = k.popular ? FREQUENCY[k.popular] : null;
-      if (k.popular && frequency == null) throw new Error(`Unknown popular "${k.popular}" for ${k.char}`);
+      const frequency = parseFrequency(k.popular);
+      if (frequency === undefined) throw new Error(`Unknown popular "${k.popular}" for ${k.char}`);
       const failed = k.crawled_at.startsWith('ERROR');
       insertChar.run(
         k.char, resolveRadical(k.radical), k.cn_vi, k.pinyin, k.strokes,
@@ -191,7 +160,7 @@ export const p1Characters: MigrationStep = {
       if (!Array.isArray(parts) || parts.length === 0) continue;
       componentChars++;
       parts.forEach((part, i) => {
-        const role = ROLE[part.t ?? ''];
+        const role = ROLE_FROM_BOTU[part.t ?? ''];
         if (!role) throw new Error(`Unknown component role "${part.t}" for ${k.char}`);
         const component = (part.ph ?? '').trim();
         if ([...component].length !== 1) throw new Error(`Component "${component}" of ${k.char} is not one character`);
@@ -209,19 +178,10 @@ export const p1Characters: MigrationStep = {
     let bareArrays = 0;
     for (const k of kept) {
       if (!k.strokes_svg) continue;
-      const parsed = JSON.parse(k.strokes_svg) as unknown;
-      // Most rows are HanziWriter objects {strokes, medians, radStrokes}; some are a bare
-      // array of stroke paths. Store both as an object so data.strokes always exists.
-      let data: { strokes?: unknown; medians?: unknown };
-      if (Array.isArray(parsed)) {
-        data = { strokes: parsed };
-        bareArrays++;
-      } else {
-        data = parsed as typeof data;
-      }
-      if (!Array.isArray(data.strokes)) throw new Error(`Stroke data of ${k.char} has no strokes array`);
-      const hasMedians = Array.isArray(data.medians) ? 1 : 0;
-      insertStrokes.run(k.char, Array.isArray(parsed) ? JSON.stringify(data) : k.strokes_svg, hasMedians);
+      const strokes = normalizeStrokeData(k.strokes_svg);
+      if (!strokes) throw new Error(`Stroke data of ${k.char} has no strokes array`);
+      if (Array.isArray(JSON.parse(k.strokes_svg))) bareArrays++;
+      insertStrokes.run(k.char, JSON.stringify(strokes.data), strokes.hasMedians ? 1 : 0);
       strokeRows++;
     }
     log(`character_strokes: ${strokeRows} rows, ${bareArrays} converted from bare stroke arrays (no medians)`);

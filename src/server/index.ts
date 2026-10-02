@@ -8,3 +8,4 @@ import 'server-only';
 export * from './repos/notes';
 export * from './repos/grammar';
 export * from './repos/passages';
+export * from './repos/characters';

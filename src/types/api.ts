@@ -110,3 +110,35 @@ export interface MBAlignSummary {
   unmatchedCount: number;
   hasTimestamps: boolean;
 }
+
+// ── Characters ───────────────────────────────────────────────────────────────
+
+/** HanziWriter character data ({strokes, medians, radStrokes}); medians may be missing. */
+export interface StrokeData {
+  strokes: string[];
+  medians?: number[][][];
+  radStrokes?: number[];
+}
+
+export interface CharacterDetailDTO {
+  char: string;
+  cnVi: string | null;
+  pinyin: string | null;
+  /** Stroke count. */
+  strokes: number | null;
+  /** "nữ 女" */
+  radical: string | null;
+  /** "hình thanh & hội ý" */
+  lucthu: string | null;
+  hinhthai: string | null;
+  netbut: string | null;
+  /** Frequency 1 (rất thấp) – 5 (rất cao). */
+  popular: number | null;
+  pos: string | null;
+  meansTdpt: string[];
+  meansTg: string[];
+  meansTdtd: string[];
+  strokesSvg: StrokeData | null;
+  botu: { t: 'y' | 'am' | 'solo'; ph: string; n: string }[] | null;
+  botuSource: 'claude' | null;
+}
