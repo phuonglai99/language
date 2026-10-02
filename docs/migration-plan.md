@@ -197,6 +197,17 @@ Kiểm tra:
 - Số câu có mốc khớp DB cũ.
 - Token có chữ Hán mà thiếu `s`: chỉ 2 (đúng bằng số token chữ Hán không có `wordId` ở DB cũ).
 
+**Kết quả chạy (2026-10-02):** danh sách cần duyệt ở [migration-review/p3-passages.md](migration-review/p3-passages.md).
+
+| Mục | Kết quả |
+|---|---|
+| `passages` | 729 (HSK1: 55 · HSK2: 137 · HSK3: 183 · HSK4: 182 · HSK5: 172) |
+| `passage_sentences` | 6.629; văn bản ghép lại khớp `content_text` cũ ở 729/729 bài |
+| Token | 119.864; 99.846 gắn được nghĩa; 2 token chữ Hán không có nghĩa (khớp DB cũ) |
+| Câu chưa có mốc audio | 865 = 864 cũ + 1 mốc dài 0 giây (`wechat-social-etiquette` câu 17) đã chuyển thành NULL |
+| Trạng thái review lệch với mốc | 4 bài: 3 bài đã biết + `wechat-social-etiquette` (do câu 17) |
+| `vocab_count` | Giảm ở 117 bài, chỉ vì dấu câu không còn bị đếm |
+
 ---
 
 ## P4. Ngữ pháp — M
