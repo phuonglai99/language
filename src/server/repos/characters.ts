@@ -130,3 +130,12 @@ export async function getStrokes(chars: string[]): Promise<Record<string, Stroke
   for (const r of rows) out[r.char] = JSON.parse(r.data) as StrokeData;
   return out;
 }
+
+/** Records a failed crawl so the character is retried later (status 'error'). */
+export function markCrawlError(db: Database.Database, char: string, message: string): void {
+  db.prepare(`
+    INSERT INTO characters (char, crawl_status, crawl_error) VALUES (?, 'error', ?)
+    ON CONFLICT(char) DO UPDATE SET crawl_status = 'error', crawl_error = excluded.crawl_error
+    WHERE characters.crawl_status <> 'ok'
+  `).run(char, message.slice(0, 500));
+}

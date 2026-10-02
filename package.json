@@ -7,11 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "import:mb": "node scripts/import-mandarin-bean.mjs",
+    "import:mb": "tsx scripts/import-mandarin-bean.ts",
     "crawl": "node scripts/crawl-mandarin-bean.mjs",
-    "crawl:grammar": "node scripts/crawl-hanzii-grammar.mjs",
+    "crawl:grammar": "tsx scripts/crawl-hanzii-grammar.ts",
     "migrate:v4": "tsx scripts/migrate-v4/index.ts",
-    "migrate:v4:report": "tsx scripts/migrate-v4/report.ts"
+    "migrate:v4:report": "tsx scripts/migrate-v4/report.ts",
+    "crawl:kanji": "tsx scripts/crawl-hanzii.ts",
+    "patch:audio": "tsx scripts/patch-audio-urls.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",

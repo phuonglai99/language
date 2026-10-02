@@ -11,7 +11,7 @@ const DEFAULT_PATH = 'data/hsk.db';
 const globalForDb = globalThis as unknown as { __hskDb?: Database.Database };
 
 export function dbPath(): string {
-  return path.resolve(process.cwd(), process.env.DB_PATH || DEFAULT_PATH);
+  return path.resolve(/* turbopackIgnore: true */ process.cwd(), process.env.DB_PATH || DEFAULT_PATH);
 }
 
 export function getDb(): Database.Database {

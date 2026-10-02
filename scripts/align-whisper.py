@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 """Align Mandarin Bean lesson audio to hanzi sentences via Whisper.
 
+Reads passages from and saves audio marks through the app's API (the app must be
+running), so the database is only written by the app:
+  GET /api/dictation/align           passages and whether they have marks
+  GET /api/dictation/align/<slug>    one passage: audio_url, content, sentences
+  PUT /api/dictation/align/<slug>    save marks
+
 Usage:
   source scripts/venv/bin/activate
   python scripts/align-whisper.py --slug you-have-grown-up --model small
   python scripts/align-whisper.py --model small
   python scripts/align-whisper.py --limit 5 --force
+  python scripts/align-whisper.py --api http://localhost:3001
 """
 
 from __future__ import annotations
@@ -14,23 +21,28 @@ import argparse
 import json
 import os
 import re
-import sqlite3
 import sys
 import tempfile
 import time
+import unicodedata
+import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = ROOT / "data" / "lessons.db"
 
-# Keep in sync with src/lib/dictation.ts
-_WORD_PUNCT = set(" \t\n\r，。？！、：；「」『』【】（）…—·“”‘’")
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 
 
+def _is_punct_char(ch: str) -> bool:
+    # Same definition as isPunctChar in src/shared/text.ts (Unicode P, Z, Sm, So, whitespace).
+    cat = unicodedata.category(ch)
+    return cat[0] in ("P", "Z") or cat in ("Sm", "So") or ch.isspace()
+
+
 def is_punct_only(hanzi: str) -> bool:
-    return bool(hanzi) and all(c in _WORD_PUNCT for c in hanzi)
+    return bool(hanzi) and all(_is_punct_char(c) for c in hanzi)
 
 
 def only_cjk(text: str) -> str:
@@ -190,12 +202,20 @@ def match_sentences(sentences: list[dict], words: list[dict]) -> list[dict]:
     return out
 
 
-def ensure_column(conn: sqlite3.Connection) -> None:
-    cols = {row[1] for row in conn.execute("PRAGMA table_info(mb_lessons)")}
-    if "sentence_timestamps" not in cols:
-        conn.execute("ALTER TABLE mb_lessons ADD COLUMN sentence_timestamps TEXT")
-        conn.commit()
-        print("Added column mb_lessons.sentence_timestamps")
+def api_request(base: str, path: str, method: str = "GET", body: dict | None = None) -> dict:
+    data = json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
+    req = urllib.request.Request(
+        base.rstrip("/") + path,
+        data=data,
+        method=method,
+        headers={"Content-Type": "application/json", "User-Agent": "hsk-web-whisper-align/1.0"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")
+        raise RuntimeError(f"{method} {path}: HTTP {exc.code} {detail}") from exc
 
 
 def download_audio(url: str, dest: Path) -> None:
@@ -211,32 +231,14 @@ def download_audio(url: str, dest: Path) -> None:
             fh.write(chunk)
 
 
-def load_lessons(
-    conn: sqlite3.Connection, slug: str | None, force: bool
-) -> list[sqlite3.Row]:
+def load_lessons(api: str, slug: str | None, force: bool) -> list[dict]:
     if slug:
-        rows = conn.execute(
-            "SELECT slug, audio_url, content, sentence_timestamps FROM mb_lessons WHERE slug = ?",
-            (slug,),
-        ).fetchall()
-        if not rows:
-            sys.exit(f"Lesson not found: {slug}")
-        return rows
-
-    if force:
-        return conn.execute(
-            "SELECT slug, audio_url, content, sentence_timestamps FROM mb_lessons ORDER BY hsk_level, slug"
-        ).fetchall()
-
-    return conn.execute(
-        """
-        SELECT slug, audio_url, content, sentence_timestamps
-        FROM mb_lessons
-        WHERE audio_url IS NOT NULL AND audio_url != ''
-          AND (sentence_timestamps IS NULL OR sentence_timestamps = '')
-        ORDER BY hsk_level, slug
-        """
-    ).fetchall()
+        return [{"slug": slug}]
+    summaries = api_request(api, "/api/dictation/align")["lessons"]
+    return [
+        l for l in summaries
+        if l.get("audio_url") and (force or not l.get("hasTimestamps"))
+    ]
 
 
 def align_lesson(model, slug: str, audio_url: str, content: list, language: str) -> list[dict]:
@@ -284,16 +286,13 @@ def main() -> None:
     parser.add_argument("--force", action="store_true", help="Re-align lessons that already have timestamps")
     parser.add_argument("--dry-run", action="store_true", help="Transcribe and print, do not write DB")
     parser.add_argument("--language", default="zh", help="Whisper language code (default: zh)")
+    parser.add_argument("--api", default="http://localhost:3000", help="Base URL of the running app")
     args = parser.parse_args()
 
-    if not DB_PATH.exists():
-        sys.exit(f"DB not found: {DB_PATH}")
-
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    ensure_column(conn)
-
-    rows = load_lessons(conn, args.slug, args.force)
+    try:
+        rows = load_lessons(args.api, args.slug, args.force)
+    except Exception as exc:  # noqa: BLE001 - surface any connection problem plainly
+        sys.exit(f"Cannot reach the app at {args.api} ({exc}). Start it first (npm run dev).")
     if args.limit:
         rows = rows[: args.limit]
     if not rows:
@@ -310,7 +309,14 @@ def main() -> None:
     failed = 0
     for i, row in enumerate(rows, 1):
         slug = row["slug"]
-        audio_url = row["audio_url"]
+        quoted = urllib.parse.quote(slug)
+        try:
+            detail = api_request(args.api, f"/api/dictation/align/{quoted}")
+        except Exception as exc:  # noqa: BLE001
+            failed += 1
+            print(f"[{i}/{len(rows)}] {slug} — ERROR loading: {exc}", file=sys.stderr)
+            continue
+        audio_url = detail["lesson"].get("audio_url")
         if not audio_url:
             print(f"[{i}/{len(rows)}] {slug} — skip (no audio_url)")
             continue
@@ -318,16 +324,20 @@ def main() -> None:
         print(f"[{i}/{len(rows)}] {slug}")
         t0 = time.time()
         try:
-            content = json.loads(row["content"])
+            content = detail["lesson"]["content"]
             timestamps = align_lesson(model, slug, audio_url, content, args.language)
             if args.dry_run:
                 print(f"    dry-run {json.dumps(timestamps, ensure_ascii=False)}")
             else:
-                conn.execute(
-                    "UPDATE mb_lessons SET sentence_timestamps = ? WHERE slug = ?",
-                    (json.dumps(timestamps, ensure_ascii=False), slug),
-                )
-                conn.commit()
+                by_index = {t["index"]: t for t in timestamps}
+                payload = []
+                for s in detail["sentences"]:
+                    t = by_index.get(s["index"], {})
+                    start, end = t.get("start"), t.get("end")
+                    if start is None or end is None or not start < end:
+                        start, end = None, None  # the API rejects empty intervals
+                    payload.append({"index": s["index"], "hanzi": s["hanzi"], "start": start, "end": end})
+                api_request(args.api, f"/api/dictation/align/{quoted}", "PUT", {"sentences": payload})
             elapsed = time.time() - t0
             print(f"    saved in {elapsed:.1f}s")
             ok += 1
@@ -335,7 +345,6 @@ def main() -> None:
             failed += 1
             print(f"    ERROR: {exc}", file=sys.stderr)
 
-    conn.close()
     print(f"Done. ok={ok} failed={failed}")
 
 

@@ -89,3 +89,27 @@ export function syncWordSearch(db: Database.Database, wordId: number): void {
     'INSERT INTO words_fts (rowid, hanzi, pinyin_plain, han_viet, meanings, meanings_plain) VALUES (?, ?, ?, ?, ?, ?)',
   ).run(wordId, row.hanzi, row.pinyin_plain, row.han_viet ?? '', meanings, stripVietnamese(meanings));
 }
+
+/**
+ * Sense for a Mandarin Bean token (wordId + contextual definition), creating the word and
+ * the English sense when the dictionary does not have them yet.
+ */
+export function findOrCreateMbSense(
+  db: Database.Database, token: { hanzi: string; pinyin: string; wordId: string; definition: string; hsk: number | null },
+): number {
+  const hanzi = token.hanzi.trim();
+  const definition = token.definition.trim();
+  const existing = db.prepare(`
+    SELECT s.id FROM word_senses s JOIN words w ON w.id = s.word_id
+    WHERE s.mb_word_id = ? AND s.meaning_en = ? AND w.hanzi = ? LIMIT 1
+  `).pluck().get(token.wordId, definition, hanzi) as number | undefined;
+  if (existing != null) return existing;
+
+  const wordId = findOrCreateWord(db, hanzi, token.pinyin, 'mandarin_bean');
+  const id = Number(db.prepare(`
+    INSERT INTO word_senses (word_id, position, meaning_en, hsk_level, source, mb_word_id)
+    VALUES (?, (SELECT COALESCE(MAX(position) + 1, 0) FROM word_senses WHERE word_id = ?), ?, ?, 'mandarin_bean', ?)
+  `).run(wordId, wordId, definition, token.hsk, token.wordId).lastInsertRowid);
+  syncWordSearch(db, wordId);
+  return id;
+}

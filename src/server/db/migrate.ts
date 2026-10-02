@@ -9,7 +9,7 @@ import path from 'node:path';
  *
  * Schema changes after that are new numbered files — never edits to an applied one.
  */
-export const MIGRATIONS_DIR = path.join(process.cwd(), 'src/server/db/migrations');
+export const MIGRATIONS_DIR = path.join(/* turbopackIgnore: true */ process.cwd(), 'src/server/db/migrations');
 
 export function migrate(db: Database.Database, dir = MIGRATIONS_DIR): number[] {
   const files = fs.readdirSync(dir)

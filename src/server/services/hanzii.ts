@@ -78,3 +78,35 @@ export async function fetchFromHanzii(char: string): Promise<HanziiCharacter | n
     strokes_svg: r.strokes as string | undefined,
   };
 }
+
+// ─── Grammar search ──────────────────────────────────────────────────────────
+
+/** One grammar point as the Hanzii search API returns it (fields we use). */
+export interface HanziiGrammarItem {
+  id: number | string;
+  _id?: string;
+  title?: string;
+  use_for?: string;
+  keywords?: string;
+  level?: string;
+  contents?: string[];
+}
+
+const GRAMMAR_HEADERS = {
+  Accept: 'application/json',
+  Referer: 'https://hanzii.net/',
+  Origin: 'https://hanzii.net',
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'X-Client-Id': 'hzw_ba07c148af1713c1e1290501',
+};
+
+/** One page of Hanzii grammar search results; throws on HTTP errors. */
+export async function searchHanziiGrammar(key: string, page: number, limit = 50): Promise<{ result: HanziiGrammarItem[]; total: number }> {
+  const url = `https://api2.hanzii.net/api/search/all/vi/grammar/?key=${encodeURIComponent(key)}&page=${page}&limit=${limit}`;
+  const res = await fetch(url, { headers: GRAMMAR_HEADERS });
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${key} p${page}`);
+  const json = await res.json() as { data?: string };
+  if (!json.data || typeof json.data !== 'string') return { result: [], total: 0 };
+  const data = decryptHanzii(json.data) as { result?: HanziiGrammarItem[]; total?: number };
+  return { result: data.result ?? [], total: data.total ?? 0 };
+}

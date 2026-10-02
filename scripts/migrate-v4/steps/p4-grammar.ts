@@ -11,70 +11,7 @@
  *     duplicate the title).
  */
 import type { MigrationStep } from '../index';
-
-const HAN = /\p{Script=Han}/u;
-const EX_WITH_PINYIN = /^[-•]\s*(.+?)\s*\/([^/]+)\/\s*(.*)$/;
-const EX_BULLET = /^[-•]\s+(.+)$/;
-const EX_HEADER = /^(ví dụ|vd)\s*[:：.]?\s*$/i;
-const FORMULA = /^cấu trúc\s*[:：]\s*(.+)$/i;
-/** "中文句子。 Câu tiếng Việt" → split where the Vietnamese starts. */
-const ZH_VI = /^([\p{Script=Han}0-9A-Za-z，。！？、：；“”‘’「」【】（）…—·\s]+?)\s+([^\p{Script=Han}]*[A-Za-zÀ-ỹ].*)$/u;
-
-const HSK: Record<string, number | null> = {
-  HSK1: 1, HSK2: 2, HSK3: 3, HSK4: 4, HSK5: 5, HSK6: 6, 'HSK7-9': 7, 'Khác': null,
-};
-const CEFR = new Set(['A1', 'A2', 'B1', 'B2', 'C1', 'C2']);
-
-interface ParsedExample { zh: string; pinyin: string | null; vi: string | null }
-
-export function parseHanziiContents(lines: string[]): { explanation: string; formula: string | null; examples: ParsedExample[] } {
-  const keep: string[] = [];
-  const examples: ParsedExample[] = [];
-  let formula: string | null = null;
-  let inExamples = false;
-  let pendingHeader: string | null = null;
-
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (EX_HEADER.test(line)) {
-      if (pendingHeader != null) keep.push(pendingHeader);
-      pendingHeader = raw;
-      inExamples = true;
-      continue;
-    }
-
-    const withPinyin = EX_WITH_PINYIN.exec(line);
-    if (withPinyin && HAN.test(withPinyin[1])) {
-      examples.push({ zh: withPinyin[1].trim(), pinyin: withPinyin[2].trim(), vi: withPinyin[3].trim() || null });
-      pendingHeader = null;
-      continue;
-    }
-
-    const bullet = inExamples ? EX_BULLET.exec(line) : null;
-    if (bullet && HAN.test(bullet[1].trim().charAt(0))) {
-      const split = ZH_VI.exec(bullet[1].trim());
-      examples.push(split
-        ? { zh: split[1].trim(), pinyin: null, vi: split[2].trim() }
-        : { zh: bullet[1].trim(), pinyin: null, vi: null });
-      pendingHeader = null;
-      continue;
-    }
-
-    // Header with no example under it stays as text.
-    if (pendingHeader != null) {
-      keep.push(pendingHeader);
-      pendingHeader = null;
-    }
-    inExamples = false;
-    if (formula == null) {
-      const f = FORMULA.exec(line);
-      if (f) formula = f[1].trim();
-    }
-    keep.push(raw);
-  }
-  if (pendingHeader != null) keep.push(pendingHeader);
-  return { explanation: keep.join('\n').trim(), formula, examples };
-}
+import { CEFR, HANZII_HSK as HSK, parseHanziiContents } from '../../../src/shared/grammarParse';
 
 interface LessonGrammar {
   title?: string;

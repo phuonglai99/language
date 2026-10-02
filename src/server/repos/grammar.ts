@@ -1,4 +1,7 @@
+import type Database from 'better-sqlite3';
 import { getDb } from '../db/connection';
+import type { HanziiGrammarItem } from '../services/hanzii';
+import { hanziiLevel, parseHanziiContents } from '@/shared/grammarParse';
 import { grammarLevelLabel, parseGrammarLevel } from '@/shared/grammar';
 import type { HanziiGrammar } from '@/types';
 
@@ -51,4 +54,42 @@ export async function listGrammarByLevel(label: string): Promise<HanziiGrammar[]
       useFor: r.use_for ?? '',
     };
   });
+}
+
+/**
+ * Upserts one crawled Hanzii grammar point (matched on its Hanzii uid); contents are parsed
+ * the same way as in the migration. Returns 'inserted' | 'updated'.
+ */
+export function saveHanziiGrammarPoint(db: Database.Database, item: HanziiGrammarItem): 'inserted' | 'updated' {
+  const uid = String(item._id ?? item.id);
+  const parsed = parseHanziiContents(item.contents ?? []);
+  const level = hanziiLevel(item.level);
+  return db.transaction(() => {
+    const existing = db.prepare('SELECT id FROM grammar_points WHERE external_uid = ?').pluck().get(uid) as number | undefined;
+    const values = [
+      (item.title ?? '').trim() || uid, parsed.formula, parsed.explanation || null,
+      item.use_for?.trim() || null, item.keywords?.trim() || null, level.hskLevel, level.cefr, level.category,
+    ];
+    let id: number;
+    if (existing != null) {
+      db.prepare(`
+        UPDATE grammar_points SET title = ?, formula = ?, explanation = ?, use_for = ?, keywords = ?,
+          hsk_level = ?, cefr = ?, category = ? WHERE id = ?
+      `).run(...values, existing);
+      db.prepare('DELETE FROM grammar_examples WHERE grammar_id = ?').run(existing);
+      id = existing;
+    } else {
+      id = Number(db.prepare(`
+        INSERT INTO grammar_points (source_data, external_uid, title, formula, explanation, use_for, keywords, hsk_level, cefr, category)
+        VALUES ('hanzii', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(uid, ...values).lastInsertRowid);
+    }
+    const insert = db.prepare('INSERT INTO grammar_examples (grammar_id, position, zh, pinyin, vi) VALUES (?, ?, ?, ?, ?)');
+    parsed.examples.forEach((e, i) => insert.run(id, i, e.zh, e.pinyin, e.vi));
+    return existing != null ? 'updated' : 'inserted';
+  })();
+}
+
+export function knownHanziiGrammarUids(db: Database.Database): Set<string> {
+  return new Set(db.prepare("SELECT external_uid FROM grammar_points WHERE source_data = 'hanzii'").pluck().all() as string[]);
 }
