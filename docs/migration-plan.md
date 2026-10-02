@@ -100,14 +100,14 @@ Cỡ việc: **S** < nửa buổi · **M** khoảng 1 buổi · **L** nhiều bu
 | P0.1 | **[G0]** Commit các thay đổi đang dở trên `main`, tạo nhánh `db-v4` | — |
 | P0.2 | **Backup B0** theo mục 2: `lessons.db`, `mandarin-bean-lessons.json`. Kiểm tra `integrity_check`, ghi checksum + số dòng vào `MANIFEST.md`, thử khôi phục (mục 2.3) | `data/backups/` |
 | P0.3 | Đọc tài liệu Next 16 trong `node_modules/next/dist/docs/` (route handler, server component, redirects), theo yêu cầu của `AGENTS.md` | — |
-| P0.4 | Cài devDependency `tsx`, dependency `server-only` | `package.json` |
-| P0.5 | Tạo module hằng số dùng chung: bộ dấu câu (gồm `“ ” ‘ ’` và dấu ASCII), `normalizePinyin` (bỏ khoảng trắng; đưa biến điệu 一/不 về dạng từ điển; `ü → v` trong `pinyin_plain`), `stripVietnamese` | `src/shared/text.ts` |
-| P0.6 | Tạo khung migration: mở DB cũ `readonly`, xoá rồi tạo `data/hsk.db`, chạy `schema.sql`, rồi chạy lần lượt các bước | `scripts/migrate-v4/index.ts`, `scripts/migrate-v4/schema.sql` (copy từ `docs/db/schema.sql`) |
+| P0.4 | Cài devDependency `tsx`. Không cài `server-only`: Next 16 tự xử lý `import 'server-only'` mà không cần package (xem `node_modules/next/dist/docs/01-app/01-getting-started/05-server-and-client-components.md`) | `package.json` |
+| P0.5 | Tạo module hằng số dùng chung: dấu câu định nghĩa theo nhóm Unicode (P, Z, Sm, So — gồm `“ ” ‘ ’`, `《》`, `……`, dấu ASCII; Python dùng `unicodedata.category` cho kết quả giống hệt), `normalizePinyin` (bỏ khoảng trắng; đưa biến điệu 一/不 về dạng từ điển khi gắn được âm tiết với chữ), `pinyinPlain` (`ü → v`), `stripVietnamese` | `src/shared/text.ts` |
+| P0.6 | Tạo khung migration: mở DB cũ `readonly`, xoá rồi tạo `data/hsk.db`, chạy schema, chạy từng bước trong transaction riêng, cuối cùng kiểm tra `foreign_key_check`. Schema đọc thẳng từ `docs/db/schema.sql` (một nguồn duy nhất; P7.1.2 chuyển thành `src/server/db/migrations/001_init.sql`) | `scripts/migrate-v4/index.ts`, `scripts/migrate-v4/steps.ts` |
 | P0.7 | Thêm lệnh `npm run migrate:v4` | `package.json` |
 
 Xong khi: có B0, `integrity_check` = ok, thử khôi phục thành công; `npm run migrate:v4` tạo được `hsk.db` rỗng với 23 bảng.
 
-⚠️ `server-only` báo lỗi khi bị import từ script Node. Script chạy bằng `tsx --conditions=react-server`, hoặc chỉ đặt `import 'server-only'` ở các file mà route import vào. Quyết định cách nào ở P0.6.
+Đã chốt cách dùng `server-only`: chỉ file barrel `src/server/index.ts` có `import 'server-only'`, và code của app import qua barrel đó. Script import thẳng `repos/` / `services/` nên không bị chặn.
 
 ---
 
@@ -313,4 +313,4 @@ Mỗi loại cần một trang duyệt nhỏ hoặc một script xuất/nhập C
 | `scp` DB lên VPS ghi đè dữ liệu chỉ có trên VPS | Đã chấp nhận: local là nguồn chính |
 | Giao diện hỏng khi đổi hình dạng dữ liệu | DTO giữ hình dạng cũ ở bước đầu; chuyển từng nhóm route và kiểm tra trong trình duyệt |
 | Link cũ `/lesson/<id>` | Chuyển hướng 12 id cũ |
-| `server-only` chặn script | Quyết định cách xử lý ở P0.6 |
+| `server-only` chặn script | Đã xử lý: chỉ barrel `src/server/index.ts` import `server-only` |

@@ -165,7 +165,7 @@ scripts/align-whisper.py  ghi kết quả qua API (PUT /api/dictation/align/[slu
 
 ### Quy tắc
 
-1. Chỉ `src/server/repos/` được viết SQL. Mọi file trong `src/server/` import `server-only` để không bị đóng gói vào bundle phía client.
+1. Chỉ `src/server/repos/` được viết SQL. Code của app chỉ import qua barrel `src/server/index.ts`, và chỉ file này có `import 'server-only'` (chặn bị đóng gói vào bundle phía client). Script import thẳng `repos/` / `services/`.
 2. Hàm trong repo luôn `async`, kể cả khi đang dùng better-sqlite3, để đổi engine không phải sửa nơi gọi.
 3. Route và giao diện chỉ dùng kiểu trong `src/types/api.ts`, không dùng kiểu hay tên cột DB.
 4. Nghiệp vụ dùng ở nhiều nơi (chấm bài, import, gọi Hanzii, Claude) nằm trong `services/`, dùng chung cho route và script.
