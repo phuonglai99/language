@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMBLesson, saveMBLessonAlignment, type SentenceTimestamp } from '@/lib/db';
+import { getPassage, savePassageAlignment } from '@/server';
+import type { SentenceTimestamp } from '@/types/api';
 import { cleanHanzi, extractSentences, remapContentToSentences } from '@/lib/dictation';
 
 export const runtime = 'nodejs';
@@ -9,7 +10,7 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params;
-  const lesson = getMBLesson(slug);
+  const lesson = await getPassage(slug);
   if (!lesson) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const tsByIndex = new Map((lesson.sentence_timestamps ?? []).map(t => [t.index, t]));
@@ -46,6 +47,7 @@ type AlignPayload = {
   sentences?: {
     index?: number;
     hanzi?: string;
+    pinyin?: string;
     start?: number | null;
     end?: number | null;
   }[];
@@ -63,7 +65,7 @@ export async function PUT(
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params;
-  const lesson = getMBLesson(slug);
+  const lesson = await getPassage(slug);
   if (!lesson) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const body = await req.json() as AlignPayload;
@@ -71,7 +73,7 @@ export async function PUT(
     return NextResponse.json({ error: 'sentences required' }, { status: 400 });
   }
 
-  const incoming: { hanzi: string; start: number | null; end: number | null }[] = [];
+  const incoming: { hanzi: string; pinyin: string; start: number | null; end: number | null }[] = [];
   for (let i = 0; i < body.sentences.length; i++) {
     const s = body.sentences[i];
     const hanzi = (s.hanzi ?? '').trim();
@@ -80,7 +82,7 @@ export async function PUT(
     if (start != null && end != null && end <= start) {
       return NextResponse.json({ error: `Câu ${i + 1}: end phải lớn hơn start` }, { status: 400 });
     }
-    incoming.push({ hanzi, start, end });
+    incoming.push({ hanzi, pinyin: (s.pinyin ?? '').trim(), start, end });
   }
 
   const original = extractSentences(lesson.content);
@@ -102,19 +104,24 @@ export async function PUT(
       start: s.start,
       end: s.end,
     }));
-    const ok = saveMBLessonAlignment(slug, timestamps);
+    const ok = await savePassageAlignment(slug, timestamps);
     if (!ok) return NextResponse.json({ error: 'Save failed' }, { status: 500 });
   } else {
     const content = remapContentToSentences(
       lesson.content,
       incoming.map(s => s.hanzi),
     );
+    // A sentence that matched no original tokens comes back as one token without pinyin;
+    // keep the pinyin typed for it in the align screen.
+    content.forEach((para, i) => {
+      if (para.length === 1 && !para[0].pinyin && incoming[i].pinyin) para[0] = { ...para[0], pinyin: incoming[i].pinyin };
+    });
     timestamps = incoming.map((s, i) => ({
       index: i,
       start: s.start,
       end: s.end,
     }));
-    const ok = saveMBLessonAlignment(slug, timestamps, content);
+    const ok = await savePassageAlignment(slug, timestamps, content);
     if (!ok) return NextResponse.json({ error: 'Save failed' }, { status: 500 });
   }
 

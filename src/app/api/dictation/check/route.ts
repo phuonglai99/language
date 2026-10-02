@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMBLesson } from '@/lib/db';
+import { getPassage } from '@/server';
 import { extractSentences, isDictationPerfect, matchDictationWords } from '@/lib/dictation';
 
 export async function POST(req: NextRequest) {
@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
   }
 
-  const lesson = getMBLesson(slug);
+  const lesson = await getPassage(slug);
   if (!lesson) return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
 
   const sentences = extractSentences(lesson.content);

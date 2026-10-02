@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getMBLessonCounts } from '@/lib/db';
+import { getPassageCounts } from '@/server';
 
 export async function GET() {
-  return NextResponse.json(getMBLessonCounts());
+  return NextResponse.json(await getPassageCounts());
 }

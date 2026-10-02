@@ -322,6 +322,7 @@ export default function AlignEditorPage() {
           sentences: sentences.map(s => ({
             index: s.index,
             hanzi: s.hanzi,
+            pinyin: s.pinyin,
             start: s.start,
             end: s.end,
           })),

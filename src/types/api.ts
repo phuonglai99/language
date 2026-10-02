@@ -37,3 +37,76 @@ export interface NewNoteItemInput {
   vn: string;
   pos: string;
 }
+
+// ── Reading passages (pre-v4 "Mandarin Bean lesson" shapes) ──────────────────
+
+export interface MBLessonWord {
+  hanzi: string;
+  pinyin: string;
+  hsk: number | null;
+  definition: string | null;
+  wordId?: string | null;
+}
+
+export interface SentenceTimestamp {
+  index: number;
+  start: number | null;
+  end: number | null;
+}
+
+export interface MBLesson {
+  slug: string;
+  url: string;
+  title_en: string;
+  title_zh_simplified: string;
+  title_zh_traditional: string;
+  hsk_level: number;
+  /** Topic category plus the review tag "Checked" / "Uncheck". */
+  categories: string[];
+  audio_url: string | null;
+  content: MBLessonWord[][];
+  content_text: string;
+  sentence_timestamps?: SentenceTimestamp[] | null;
+}
+
+/** Card-sized passage: no content, so lists stay cheap. */
+export type MBLessonListItem = Omit<MBLesson, 'content' | 'content_text' | 'sentence_timestamps'> & { vocabCount: number };
+
+export interface MBLessonFilters {
+  hsk?: number | null;
+  /** Matched against titles and category. */
+  q?: string | null;
+  /** 'checked' | 'uncheck' | 'unchecked' */
+  status?: string | null;
+  /** Also match `q` against the passage text (dictation search). */
+  searchContentText?: boolean;
+}
+
+export interface MBLessonNavItem {
+  slug: string;
+  title_en: string;
+  title_zh_simplified: string;
+}
+
+export interface MBLessonNeighbors {
+  prev: MBLessonNavItem | null;
+  next: MBLessonNavItem | null;
+  index: number;
+  total: number;
+}
+
+export interface MBLessonCounts {
+  total: number;
+  byHsk: Record<number, number>;
+}
+
+export interface MBAlignSummary {
+  slug: string;
+  title_en: string;
+  title_zh_simplified: string;
+  hsk_level: number;
+  audio_url: string | null;
+  sentenceCount: number;
+  unmatchedCount: number;
+  hasTimestamps: boolean;
+}

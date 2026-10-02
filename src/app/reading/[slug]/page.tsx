@@ -1,10 +1,10 @@
 import Link from 'next/link';
-import { getAdjacentMBLessons, getMBLesson } from '@/lib/db';
+import { getAdjacentPassages, getPassage } from '@/server';
 import LessonReader from './LessonReader';
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const lesson = getMBLesson(slug);
+  const lesson = await getPassage(slug);
   if (!lesson) return { title: 'Không tìm thấy bài đọc' };
   return {
     title: `${lesson.title_zh_simplified} — ${lesson.title_en} | HSK ${lesson.hsk_level}`,
@@ -16,7 +16,7 @@ export default async function ReadingLessonPage({ params }: { params: Promise<{ 
   const { slug } = await params;
   // Rendered on the server, so the lesson text is in the first response instead
   // of waiting on hydration + a /api/reading/[slug] round-trip.
-  const lesson = getMBLesson(slug);
+  const lesson = await getPassage(slug);
 
   if (!lesson) return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, background: 'transparent' }}>
@@ -25,7 +25,7 @@ export default async function ReadingLessonPage({ params }: { params: Promise<{ 
     </div>
   );
 
-  const neighbors = getAdjacentMBLessons(lesson.slug, lesson.hsk_level);
+  const neighbors = await getAdjacentPassages(lesson.slug, lesson.hsk_level);
   return (
     <LessonReader
       lesson={lesson}

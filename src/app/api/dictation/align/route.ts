@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMBAlignSummaries } from '@/lib/db';
+import { getAlignSummaries } from '@/server';
 
 export const runtime = 'nodejs';
 
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const q = searchParams.get('q')?.toLowerCase() ?? '';
   const status = searchParams.get('status')?.toLowerCase() ?? '';
 
-  let lessons = getMBAlignSummaries();
+  let lessons = await getAlignSummaries();
   if (hsk) lessons = lessons.filter(l => l.hsk_level === Number(hsk));
   if (unmatchedOnly) lessons = lessons.filter(l => l.unmatchedCount > 0);
   if (status === 'checked') lessons = lessons.filter(l => l.unmatchedCount === 0);

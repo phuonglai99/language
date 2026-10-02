@@ -1,4 +1,4 @@
-import type { MBLessonWord } from '@/lib/db';
+import type { MBLessonWord } from '@/types/api';
 
 export interface DictationSentence {
   index: number;

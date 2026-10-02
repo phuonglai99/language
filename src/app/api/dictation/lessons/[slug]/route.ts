@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMBLesson, countLessonVocab } from '@/lib/db';
+import { getPassage } from '@/server';
 import { extractSentences } from '@/lib/dictation';
 
 export async function GET(
@@ -7,7 +7,7 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params;
-  const lesson = getMBLesson(slug);
+  const lesson = await getPassage(slug);
   if (!lesson) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const tsByIndex = new Map(
@@ -35,7 +35,7 @@ export async function GET(
       hsk_level: lesson.hsk_level,
       categories: lesson.categories,
       audio_url: lesson.audio_url,
-      vocabCount: countLessonVocab(lesson.content),
+      vocabCount: lesson.vocabCount,
     },
     sentences,
   });

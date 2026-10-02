@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { queryMBLessons } from '@/lib/db';
+import { queryPassages } from '@/server';
 import { ReadingBreadcrumb } from './ReadingBreadcrumb';
 import { ReadingSearch, ReadingFilterPills, type AlignmentStatus } from './ReadingFilters';
 
@@ -41,7 +41,7 @@ export default async function ReadingPage({ searchParams }: Props) {
 
   // Read straight from SQLite while rendering: no client fetch round-trip, and
   // the filtering happens in the query rather than over the whole table.
-  const lessons = queryMBLessons({ hsk, q, status });
+  const lessons = await queryPassages({ hsk, q, status });
 
   return (
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
