@@ -1,8 +1,9 @@
 import type { MigrationStep } from './index';
 import { p1Characters } from './steps/p1-characters';
+import { p2Words } from './steps/p2-words';
 
 /**
  * Steps run in order, each inside its own transaction.
  * P1–P5 of docs/migration-plan.md add their steps here.
  */
-export const steps: MigrationStep[] = [p1Characters];
+export const steps: MigrationStep[] = [p1Characters, p2Words];

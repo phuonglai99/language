@@ -1,0 +1,7 @@
+[
+  {"zh": "空调", "py": "kōngtiáo", "reason": "File import ghi kòngtiáo"},
+  {"zh": "着急", "py": "zháojí", "reason": "File import ghi zhāojí"},
+  {"zh": "阻止", "py": "zǔzhǐ", "reason": "File import ghi zǔzhī"},
+  {"zh": "下载", "py": "xiàzài", "reason": "File import ghi xiàzǎi; cách đọc chuẩn hiện nay là xiàzài"},
+  {"zh": "会计", "py": "kuàijì", "reason": "File import ghi kuàìjì (thừa dấu thanh)"}
+]

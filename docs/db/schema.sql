@@ -21,7 +21,9 @@ CREATE TABLE radicals (
   han_viet      TEXT NOT NULL,                   -- nữ
   kangxi_no     INTEGER CHECK (kangxi_no BETWEEN 1 AND 214),  -- 氵 và 水 cùng số 85
   meaning_vi    TEXT,                            -- phụ nữ
-  stroke_count  INTEGER
+  stroke_count  INTEGER,
+  source        TEXT NOT NULL CHECK (source IN ('hanzii','ai','manual')),  -- hanzii: dạng + tên có trong dữ liệu Hanzii; ai: do AI thêm vào seed
+  verified      INTEGER NOT NULL DEFAULT 0 CHECK (verified IN (0,1))      -- meaning_vi / kangxi_no / stroke_count do AI soạn, chờ duyệt
 );
 CREATE INDEX radicals_kangxi ON radicals(kangxi_no);
 
@@ -79,13 +81,12 @@ CREATE TABLE words (
   id            INTEGER PRIMARY KEY,
   hanzi         TEXT NOT NULL,                   -- 会 / 爸爸 / 互联网
   traditional   TEXT,
-  pinyin        TEXT NOT NULL,                   -- chuẩn hoá: không khoảng trắng thừa, dạng từ điển (yīzài, không phải yí zài)
+  pinyin        TEXT NOT NULL,                   -- chuẩn hoá: không khoảng trắng thừa, dạng từ điển (yīzài, không phải yí zài); so khớp không phân biệt hoa/thường
   pinyin_plain  TEXT NOT NULL,                   -- huì → hui, lǜ → lv (tìm kiếm không dấu)
   han_viet      TEXT,                            -- hội / bả bả
   hsk_level     INTEGER CHECK (hsk_level BETWEEN 1 AND 7),  -- cấp THẤP NHẤT mà từ xuất hiện
   topic         TEXT,
   source        TEXT NOT NULL CHECK (source IN ('import','mandarin_bean','ai','manual')),
-  mb_word_id    TEXT UNIQUE,                     -- Mandarin Bean: 1 wordId = 1 word (54380 = 会 huì)
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   UNIQUE (hanzi, pinyin)                         -- 行 xíng và 行 háng là 2 word
@@ -114,16 +115,18 @@ CREATE TABLE word_senses (
   id          INTEGER PRIMARY KEY,
   word_id     INTEGER NOT NULL REFERENCES words(id) ON DELETE CASCADE,
   position    INTEGER NOT NULL,                  -- thứ tự hiển thị, nghĩa phổ biến trước
-  pos         TEXT NOT NULL REFERENCES parts_of_speech(code),
+  pos         TEXT REFERENCES parts_of_speech(code),     -- NULL = chưa xác định (nghĩa từ Mandarin Bean không có từ loại)
   meaning_vi  TEXT,                              -- biết (làm gì)
   meaning_en  TEXT,                              -- can; to know how to
   hsk_level   INTEGER CHECK (hsk_level BETWEEN 1 AND 7),  -- nghĩa này được dạy ở cấp nào (会 "biết" HSK1, "cuộc họp" HSK3)
   note        TEXT,                              -- cách dùng, lưu ý
   source      TEXT NOT NULL CHECK (source IN ('import','mandarin_bean','ai','manual')),
+  mb_word_id  TEXT,                                -- Mandarin Bean wordId = 1 mục từ điển (钱 "tiền" ≠ 钱 "họ Tiền"); 1 wordId có thể có nhiều definition
   verified    INTEGER NOT NULL DEFAULT 0 CHECK (verified IN (0,1)),  -- pos/nghĩa đã có người duyệt (pos cũ: 69% "Danh từ" mặc định)
   UNIQUE (word_id, position)
 );
 CREATE INDEX word_senses_word ON word_senses(word_id);
+CREATE INDEX word_senses_mb ON word_senses(mb_word_id) WHERE mb_word_id IS NOT NULL;
 
 CREATE TABLE sense_examples (
   sense_id   INTEGER NOT NULL REFERENCES word_senses(id) ON DELETE CASCADE,

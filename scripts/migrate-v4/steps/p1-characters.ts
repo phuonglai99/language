@@ -81,20 +81,29 @@ export const p1Characters: MigrationStep = {
   run({ old, db, log }) {
     // ── P1.1 radicals ────────────────────────────────────────────────────────
     const seed = JSON.parse(fs.readFileSync(SEED, 'utf8')) as SeedRadical[];
+    // Forms that occur in the Hanzii data (kanji.radical = "nữ 女") keep source 'hanzii';
+    // forms only present because the seed added them are 'ai'. Meaning, Kangxi number and
+    // stroke count were written by AI for every row, hence verified = 0 throughout.
+    const hanziiForms = new Set(
+      (old.prepare("SELECT DISTINCT radical FROM kanji WHERE radical LIKE '% %'").all() as { radical: string }[])
+        .map(r => r.radical.slice(r.radical.indexOf(' ') + 1).trim().normalize('NFKC')),
+    );
     const insertRadical = db.prepare(
-      'INSERT INTO radicals (form, han_viet, kangxi_no, meaning_vi, stroke_count) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO radicals (form, han_viet, kangxi_no, meaning_vi, stroke_count, source, verified) VALUES (?, ?, ?, ?, ?, ?, 0)',
     );
     const radicalIdByForm = new Map<string, number>();
     const mainFormByHv = new Map<string, string>();
     for (const r of seed) {
       const rows = [{ form: r.form, strokes: r.strokes }, ...r.variants];
       for (const v of rows) {
-        const { lastInsertRowid } = insertRadical.run(v.form, r.hv, r.no, r.meaning, v.strokes);
+        const source = hanziiForms.has(v.form) ? 'hanzii' : 'ai';
+        const { lastInsertRowid } = insertRadical.run(v.form, r.hv, r.no, r.meaning, v.strokes, source);
         radicalIdByForm.set(v.form, Number(lastInsertRowid));
       }
       if (!mainFormByHv.has(r.hv)) mainFormByHv.set(r.hv, r.form);
     }
-    log(`radicals: ${radicalIdByForm.size} rows (${seed.length} Kangxi + variants)`);
+    const aiRows = (db.prepare("SELECT COUNT(*) AS n FROM radicals WHERE source = 'ai'").get() as { n: number }).n;
+    log(`radicals: ${radicalIdByForm.size} rows (${seed.length} Kangxi + variants); source: ${radicalIdByForm.size - aiRows} hanzii, ${aiRows} ai`);
 
     const resolveRadical = (raw: string | null): number | null => {
       const value = raw?.trim();

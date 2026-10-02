@@ -125,7 +125,7 @@ Hai nguồn đầu trùng nhau 2.835 từ.
 | `hsk_level` | 🔧 cấp thấp nhất trong các bài "HSK1".."HSK6" (106 từ xuất hiện ở 2 cấp), nếu không có thì lấy `content[][].hsk` (1–7) |
 | `topic` | 🔧 `lessons.title` của 3 bài chủ đề ("Bài 2 – Giao thông" → "Giao thông") |
 | `source` | 🔧 `import` / `mandarin_bean` / `manual` (từ ghi chú) |
-| `mb_word_id` | ✅ `content[][].wordId` (1 wordId = 1 cặp hanzi + pinyin, đã kiểm tra) |
+| *(bỏ `mb_word_id`)* | Chuyển xuống `word_senses.mb_word_id`: 1 `wordId` là 1 mục từ điển; cùng (chữ, pinyin) có thể có nhiều `wordId` (钱 "tiền" / "họ Tiền") |
 | `created_at` | ✅ `lessons.created_at` / `note_items.created_at` |
 
 **`word_characters`** (~22k dòng) 🔧 tách `words.hanzi` thành từng chữ.

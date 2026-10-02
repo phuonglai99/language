@@ -43,6 +43,46 @@ const SANDHI: Record<string, Record<string, string>> = {
   '不': { 'bú': 'bù' },
 };
 
+/** Syllables starting with a, o, e take an apostrophe when written joined ("kě ài" → "kě'ài"). */
+const VOWEL_INITIAL = /^[aāáǎàoōóǒòeēéěè]/i;
+
+function joinSyllables(parts: string[]): string {
+  return parts
+    .map(p => p.replace(/’/g, "'"))
+    .map((p, i) => (i > 0 && VOWEL_INITIAL.test(p) ? `'${p}` : p))
+    .join('');
+}
+
+/** Removes tone marks but keeps ü ("lǜ" → "lü"), so neutral-tone variants can be compared. */
+export function stripTones(pinyin: string): string {
+  return pinyin.normalize('NFD').replace(/[̀́̄̌]/g, '').normalize('NFC');
+}
+
+/**
+ * True when two spellings of the same word differ only by neutral tones
+ * ("dōngxī" ~ "dōngxi", "chūlái" ~ "chulai"), never by two different tones
+ * ("zhōng" vs "zhòng"). Spacing, apostrophes and case are ignored.
+ */
+export function neutralToneVariants(a: string, b: string): boolean {
+  const norm = (s: string) => [...s.normalize('NFC').toLowerCase().replace(/[\s'’·-]/g, '')];
+  const x = norm(a);
+  const y = norm(b);
+  if (x.length !== y.length) return false;
+  for (let i = 0; i < x.length; i++) {
+    if (x[i] === y[i]) continue;
+    const bx = stripTones(x[i]);
+    const by = stripTones(y[i]);
+    if (bx !== by) return false;
+    if (x[i] !== bx && y[i] !== by) return false; // two different tones
+  }
+  return true;
+}
+
+/** Number of tone-marked vowels — a fuller citation form has more. */
+export function toneMarkCount(pinyin: string): number {
+  return [...pinyin.normalize('NFC')].filter(ch => stripTones(ch) !== ch).length;
+}
+
 function fixSandhi(char: string, syllable: string): string {
   const table = SANDHI[char];
   if (!table) return syllable;
@@ -66,10 +106,10 @@ export function normalizePinyin(hanzi: string, pinyin: string): string {
   const parts = p.split(/\s+/);
 
   if (parts.length > 1 && parts.length === chars.length) {
-    return parts.map((syl, i) => fixSandhi(chars[i], syl)).join('');
+    return joinSyllables(parts.map((syl, i) => fixSandhi(chars[i], syl)));
   }
 
-  let joined = parts.join('');
+  let joined = joinSyllables(parts);
   const first = chars[0];
   if (first && SANDHI[first]) {
     for (const [from, to] of Object.entries(SANDHI[first])) {

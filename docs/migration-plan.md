@@ -148,7 +148,7 @@ Kiểm tra:
 | P2.1 | Seed `parts_of_speech` (n, v, adj, adv, m, conj, pron, prep, num, part, propn, intj, vo, modal, phrase) kèm bảng map từ nhãn tiếng Việt cũ |
 | P2.2 | `words` lần 1 từ 6 danh sách HSK1–6 (`lessons.data.vocab`): chuẩn hoá pinyin, gộp từ trùng, `hsk_level` lấy cấp thấp nhất, `source = 'import'` |
 | P2.3 | Thêm từ của 3 bài chủ đề: gán `topic`. Từ đã có thì chỉ cập nhật `topic` |
-| P2.4 | `words` từ token Mandarin Bean có `wordId`: khớp theo (hanzi, pinyin đã chuẩn hoá) hoặc tạo mới với `source = 'mandarin_bean'`; ghi `mb_word_id`; `hsk_level` lấy từ token nếu từ chưa có cấp |
+| P2.4 | `words` từ token Mandarin Bean có `wordId`: khớp theo (hanzi, pinyin đã chuẩn hoá) hoặc tạo mới với `source = 'mandarin_bean'`; ghi `mb_word_id` vào `word_senses`; `hsk_level` lấy từ token nếu từ chưa có cấp |
 | P2.5 | `word_senses`: nghĩa vi từ vocab (ô từ loại gộp như "Động từ / Danh từ" tách thành 2 nghĩa) và nghĩa en từ mỗi cặp (wordId, definition). Tất cả `verified = 0` |
 | P2.6 | `sense_examples` từ `vocab[].ex` |
 | P2.7 | `word_characters`: tách `words.hanzi` thành từng chữ |
@@ -162,6 +162,24 @@ Kiểm tra:
 - 7.531 nghĩa en + khoảng 5.000 nghĩa vi.
 - Mọi chữ trong `word_characters` có trong `characters`.
 - Tìm "hoc", "lv", "好" đều ra kết quả.
+
+**Kết quả chạy (2026-10-02):** danh sách cần duyệt ở [migration-review/p2-words.md](migration-review/p2-words.md).
+
+| Mục | Kết quả | Ghi chú |
+|---|---|---|
+| `words` | 8.903 (import 4.929, mandarin_bean 3.974) | 5 từ trong ghi chú đều đã có sẵn |
+| `word_senses` | 12.556 (vi 5.024, en 7.532) | 7.532 nghĩa en chưa có từ loại (`pos` NULL), chờ P9 |
+| `sense_examples` | 5.067 | |
+| `word_characters` | 18.019 | Mọi chữ đều có trong `characters` |
+| `han_viet` | 3.299 từ | Chữ có nhiều âm Hán Việt thì để NULL |
+| `hsk_level` | 1: 304 · 2: 211 · 3: 485 · 4: 892 · 5: 1.675 · 6: 2.663 · 7–9: 534 · chưa có: 2.139 | |
+
+Các thay đổi so với thiết kế ban đầu, phát hiện khi chạy:
+- **`wordId` của Mandarin Bean là một mục từ điển, không phải một từ.** Có 23 cặp (chữ, pinyin) mang hơn 1 `wordId` (钱 "tiền" / 钱 "họ Tiền"), và 585 `wordId` có nhiều definition. Vì vậy `mb_word_id` chuyển từ `words` (UNIQUE) xuống `word_senses`, và `word_senses.pos` cho phép NULL.
+- **Không gộp hai cách viết của Mandarin Bean với nhau.** Gộp không phân biệt hoa/thường đã làm dính 钱 qián với Qián, 苹果 píngguǒ với Píngguǒ (Apple), 得 de với dé. Từ import gắn vào cách viết gần nhất của từ điển: khớp chính xác → không phân biệt hoa/thường và dấu `'` → chỉ khác thanh nhẹ.
+- **Thêm dấu `'` khi nối âm tiết bắt đầu bằng nguyên âm** (`kě ài` → `kě'ài`).
+- **Lỗi gõ đã biết nằm trong `scripts/migrate-v4/seed/vocab-fixes.json`** (5 dòng). Ô có chú thích (`哪里 (哪儿)`, `安全 [an toàn]`) được làm sạch. `得（助动词）` thực chất là trợ từ de (theo ví dụ và nghĩa), không sửa thành děi.
+- **Tìm kiếm:** "hoc" cũng ra 哭 vì "khóc" bỏ dấu thành "khoc", chứa chuỗi "hoc". API tìm kiếm ở P7 cần xếp hạng kết quả.
 
 ---
 
