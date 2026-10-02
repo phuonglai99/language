@@ -223,6 +223,13 @@ Kiểm tra:
 - 1.744 điểm; 437 điểm `hsk_level = NULL` (294 Li hợp + 143 Dịch).
 - 27 bài tập; 38 ví dụ từ bài upload.
 
+**Kết quả chạy (2026-10-02):**
+- 1.744 điểm: 1.734 Hanzii + 10 từ bài upload. Theo cấp: 1: 96 · 2: 119 · 3: 112 · 4: 177 · 5: 297 · 6: 251 · 7–9: 255 · chưa xếp cấp: 437 (Li hợp 294, Dịch 143).
+- 6.380 ví dụ Hanzii (có cột `pinyin` riêng) + 38 ví dụ từ bài upload; 27 bài tập; 4 so sánh.
+- Kiểm tra không mất dòng: 16.653 dòng `contents`, mọi dòng đều nằm trong `explanation` hoặc thành ví dụ. Các dòng cấu trúc như "- Khẳng định: Chủ ngữ + 需 + …" mà code cũ làm mất giờ nằm trong `explanation`.
+- `formula` chỉ lấy từ dòng "Cấu trúc: …": 532 điểm có; 1.202 điểm không có dòng đó nên để NULL (không còn trùng `title`).
+- Tiêu đề Hanzii là tiếng Việt, nên `title` = tiêu đề Hanzii và `title_vi` = NULL; `keywords` giữ ở cột riêng.
+
 ---
 
 ## P5. Ghi chú — S
@@ -234,6 +241,8 @@ Kiểm tra:
 
 Kiểm tra: 2 folder, 5 item; không có item nào thiếu `word_id`.
 
+**Kết quả chạy (2026-10-02):** 2 folder, 5 item; cả 5 đều tìm được từ và nghĩa. `source_lesson_id` cũ đều rỗng nên không mất gì.
+
 ---
 
 ## P6. Đối chiếu tổng — S · [G1]
@@ -243,6 +252,7 @@ Kiểm tra: 2 folder, 5 item; không có item nào thiếu `word_id`.
 | P6.1 | Script `scripts/migrate-v4/report.ts`: bảng số liệu DB cũ ↔ DB mới cho mọi kiểm tra ở P1–P5; chạy `PRAGMA integrity_check`, `foreign_key_check`; so dung lượng file |
 | P6.2 | Xuất mẫu ngẫu nhiên để xem tay: 20 chữ, 20 từ (kèm nghĩa), 5 bài khóa (3 câu đầu kèm mốc), 10 điểm ngữ pháp |
 | P6.3 | **Bạn duyệt báo cáo.** Có sai lệch thì sửa P1–P5 và chạy lại |
+| | **Kết quả (2026-10-02):** `npm run migrate:v4:report` → [migration-review/p6-report.md](migration-review/p6-report.md): 22/22 kiểm tra đạt, `integrity_check` ok, không lỗi FK, 98 MB → 56,7 MB |
 | P6.4 | **Backup B1**: `hsk.db` đã duyệt |
 
 Xong khi bạn duyệt báo cáo.

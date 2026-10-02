@@ -10,7 +10,8 @@
     "import:mb": "node scripts/import-mandarin-bean.mjs",
     "crawl": "node scripts/crawl-mandarin-bean.mjs",
     "crawl:grammar": "node scripts/crawl-hanzii-grammar.mjs",
-    "migrate:v4": "tsx scripts/migrate-v4/index.ts"
+    "migrate:v4": "tsx scripts/migrate-v4/index.ts",
+    "migrate:v4:report": "tsx scripts/migrate-v4/report.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
