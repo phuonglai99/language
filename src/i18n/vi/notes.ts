@@ -1,0 +1,43 @@
+/** UI text: notes. See src/i18n/README.md. */
+export const notes = {
+  actions: {
+    cancel: 'Huỷ',
+    delete: 'Xoá',
+  },
+  folders: {
+    title: '📝 Ghi chú của tôi',
+    newFolderPlaceholder: 'Tên folder…',
+    create: 'Tạo',
+    newFolder: '+ Tạo folder mới',
+    emptyTitle: 'Chưa có folder nào.',
+    emptyHint: 'Tạo folder đầu tiên để bắt đầu lưu từ vựng.',
+    wordCount: (n: number) => `${n} từ`,
+    open: 'Xem →',
+  },
+  folder: {
+    backToNotes: '← Quay lại ghi chú',
+    back: '← Ghi chú',
+    selectWords: 'Chọn từ',
+    createQuiz: '测 Tạo bài kiểm tra',
+    selectedCount: (n: number) => `${n} từ`,
+    selectAll: 'Chọn tất cả',
+    deselectAll: 'Bỏ chọn tất cả',
+    quiz: '测 Kiểm tra',
+    deleteSelectedConfirm: (n: number) => `Xoá ${n} từ?`,
+    cannotUndo: 'Hành động này không thể hoàn tác.',
+    deleteFolderConfirm: 'Xoá folder?',
+    quizPickHint: 'Chọn những từ muốn đưa vào bài kiểm tra — bấm card để chọn/bỏ chọn',
+    selectHint: 'Chọn từ muốn xoá hoặc kiểm tra — bấm card để chọn/bỏ chọn',
+    itemCount: (n: number) => `${n} từ trong folder này`,
+    emptyTitle: 'Folder này chưa có từ nào.',
+    emptyHint: 'Click vào từ trong bài học để thêm vào đây.',
+    goToLesson: 'Đi đến bài học',
+  },
+  modal: {
+    heading: 'Thêm vào folder',
+    newFolderPlaceholder: 'Tên folder mới…',
+    ok: 'OK',
+    newFolder: '+ Tạo folder mới',
+    saved: '✓ Đã lưu',
+  },
+} as const;

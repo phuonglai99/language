@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { t } from '@/i18n';
 import { queryPassages } from '@/server';
 import { ReadingBreadcrumb } from './ReadingBreadcrumb';
 import { ReadingSearch, ReadingFilterPills, type AlignmentStatus } from './ReadingFilters';
@@ -23,7 +24,7 @@ function isAlignmentStatus(cat: string) {
 function AlignmentStatusBadge({ status }: { status: AlignmentStatus }) {
   return (
     <span className={`align-badge ${status === 'Checked' ? 'align-badge-checked' : 'align-badge-uncheck'}`}>
-      {status}
+      {t.common.alignmentStatus[status]}
     </span>
   );
 }
@@ -50,12 +51,12 @@ export default async function ReadingPage({ searchParams }: Props) {
         <div style={{ maxWidth: 1080, margin: '0 auto', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Link href="/" className="reading-back-link" style={{ textDecoration: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 13, marginRight: 4, transition: 'color 0.15s' }}>← </Link>
-            <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 20, fontWeight: 700, color: '#fff' }}>读课文</span>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>Đọc bài khoá</span>
+            <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 20, fontWeight: 700, color: '#fff' }}>{t.reading.list.titleZh}</span>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>{t.common.features.reading}</span>
           </div>
           <ReadingSearch hsk={hsk} q={q} status={status} />
           <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(200,191,176,0.5)', whiteSpace: 'nowrap' }}>
-            <strong style={{ color: '#f5f1e8' }}>{lessons.length}</strong> bài
+            <strong style={{ color: '#f5f1e8' }}>{lessons.length}</strong>{t.common.lessonCountSuffix}
           </span>
         </div>
       </header>
@@ -63,7 +64,7 @@ export default async function ReadingPage({ searchParams }: Props) {
       <main style={{ maxWidth: 1080, margin: '0 auto', padding: '24px 24px' }}>
         {(hsk || q) && (
           <ReadingBreadcrumb items={[
-            { href: '/reading', label: 'Đọc bài khoá' },
+            { href: '/reading', label: t.common.features.reading },
             ...(hsk ? [{ href: q ? `/reading?hsk=${hsk}` : undefined, label: `HSK ${hsk}` }] : []),
             ...(q ? [{ label: q }] : []),
           ]} />
@@ -72,7 +73,7 @@ export default async function ReadingPage({ searchParams }: Props) {
 
         {/* Grid */}
         {lessons.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)' }}>Không tìm thấy bài nào.</div>
+          <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)' }}>{t.common.emptyLessons}</div>
         ) : (
           <div className="lesson-grid">
             {lessons.map(l => {
@@ -100,7 +101,7 @@ export default async function ReadingPage({ searchParams }: Props) {
                       <div className="lesson-card-cats">
                         {displayCategories.map(cat => <span key={cat} className="cat-badge">{cat}</span>)}
                       </div>
-                      <span className="lesson-card-count">{l.vocabCount ?? 0} từ</span>
+                      <span className="lesson-card-count">{t.reading.list.vocabCount(l.vocabCount ?? 0)}</span>
                     </div>
                   </div>
                 </div>

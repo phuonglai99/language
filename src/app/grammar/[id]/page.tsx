@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { Lesson, GrammarPoint, Exercise, Comparison } from '@/types';
+import { t } from '@/i18n';
 
 function ExerciseItem({ ex, idx }: { ex: Exercise; idx: number }) {
   const [chosen, setChosen] = useState<string | null>(null);
@@ -13,7 +14,7 @@ function ExerciseItem({ ex, idx }: { ex: Exercise; idx: number }) {
 
   return (
     <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '16px 20px', marginBottom: 10 }}>
-      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ash-light)', marginBottom: 8 }}>Bài {idx + 1}</div>
+      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ash-light)', marginBottom: 8 }}>{t.grammar.exercise.label(idx + 1)}</div>
       <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 16, color: 'var(--ink)', marginBottom: 14, lineHeight: 1.6 }}>{ex.question}</div>
 
       {ex.type === 'choice' && (
@@ -40,17 +41,17 @@ function ExerciseItem({ ex, idx }: { ex: Exercise; idx: number }) {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input
             value={fillVal} onChange={e => setFillVal(e.target.value)} disabled={revealed}
-            placeholder="Điền câu trả lời..."
+            placeholder={t.grammar.exercise.fillPlaceholder}
             style={{ flex: 1, padding: '9px 14px', border: `1.5px solid ${revealed ? (correct ? 'var(--green)' : 'var(--red)') : 'var(--border)'}`, borderRadius: 6, background: revealed ? (correct ? 'var(--green-light)' : 'var(--red-light)') : 'var(--paper-alt)', color: 'var(--ink)', fontSize: 15, fontFamily: 'Noto Serif SC, serif', outline: 'none' }}
           />
-          {!revealed && <button onClick={() => setRevealed(true)} style={{ padding: '9px 16px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--card-bg)', cursor: 'pointer', fontSize: 13, color: 'var(--ash)' }}>Kiểm tra</button>}
+          {!revealed && <button onClick={() => setRevealed(true)} style={{ padding: '9px 16px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--card-bg)', cursor: 'pointer', fontSize: 13, color: 'var(--ash)' }}>{t.grammar.exercise.check}</button>}
         </div>
       )}
 
       {done && ex.explanation && (
         <div style={{ marginTop: 10, padding: '8px 12px', background: 'var(--gold-light)', borderRadius: 5, fontSize: 12.5, color: 'var(--gold)' }}>
           💡 {ex.explanation}
-          {!correct && ex.type === 'fill' && <span> — Đáp án: <strong style={{ fontFamily: 'Noto Serif SC, serif' }}>{ex.answer}</strong></span>}
+          {!correct && ex.type === 'fill' && <span>{t.grammar.exercise.answerPrefix}<strong style={{ fontFamily: 'Noto Serif SC, serif' }}>{ex.answer}</strong></span>}
         </div>
       )}
     </div>
@@ -96,7 +97,7 @@ function GrammarSection({ g, open, onToggle, sectionRef }: { g: GrammarPoint; op
 
           {g.examples.length > 0 && (
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ash-light)', marginBottom: 10 }}>Ví dụ</div>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ash-light)', marginBottom: 10 }}>{t.grammar.section.examples}</div>
               {g.examples.map((ex, i) => (
                 <div key={i} style={{ padding: '10px 14px', background: 'var(--paper-alt)', border: '1px solid var(--border)', borderRadius: 6, marginBottom: 6 }}>
                   <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 15, color: 'var(--ink)', marginBottom: 3 }}>{ex.zh}</div>
@@ -109,14 +110,14 @@ function GrammarSection({ g, open, onToggle, sectionRef }: { g: GrammarPoint; op
 
           {g.comparisons && g.comparisons.length > 0 && (
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ash-light)', marginBottom: 10 }}>So sánh từ dễ nhầm</div>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ash-light)', marginBottom: 10 }}>{t.grammar.section.comparisons}</div>
               {g.comparisons.map((c, i) => <ComparisonCard key={i} c={c} />)}
             </div>
           )}
 
           {g.exercises.length > 0 && (
             <div>
-              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ash-light)', marginBottom: 10 }}>Bài tập</div>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ash-light)', marginBottom: 10 }}>{t.grammar.section.exercises}</div>
               {g.exercises.map((ex, i) => <ExerciseItem key={ex.id} ex={ex} idx={i} />)}
             </div>
           )}
@@ -149,7 +150,7 @@ export default function GrammarPage() {
     g.title.toLowerCase().includes(q) || g.titleVn.toLowerCase().includes(q)
   ) : lesson.grammar) : [];
 
-  if (!lesson) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--ash)' }}>Đang tải...</div>;
+  if (!lesson) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--ash)' }}>{t.common.loading}</div>;
 
   return (
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
@@ -158,12 +159,12 @@ export default function GrammarPage() {
         <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', gap: 14 }}>
           <Link href="/" style={{ textDecoration: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 13, flexShrink: 0, transition: 'color 0.15s' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}>← Về</Link>
+            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}>{t.common.back}</Link>
           <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.12)', flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{lesson.title}</div>
             <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 1 }}>
-              {lesson.grammar.length} điểm ngữ pháp · {lesson.level}
+              {t.grammar.pointCount(lesson.grammar.length)} · {lesson.level}
             </div>
           </div>
           <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -171,7 +172,7 @@ export default function GrammarPage() {
             <input
               value={search}
               onChange={e => { setSearch(e.target.value); setOpenIdx(null); }}
-              placeholder="Tìm ngữ pháp…"
+              placeholder={t.grammar.searchPlaceholder}
               style={{ padding: '7px 12px 7px 30px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 20, color: '#fff', fontSize: 12, fontFamily: 'Be Vietnam Pro, sans-serif', outline: 'none', width: 160 }}
             />
           </div>
@@ -184,7 +185,7 @@ export default function GrammarPage() {
           }}
             onMouseEnter={e => (e.currentTarget.style.background = '#c0392b')}
             onMouseLeave={e => (e.currentTarget.style.background = '#e5484d')}>
-            <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 15 }}>卡</span> Flashcard
+            <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 15 }}>卡</span> {t.common.features.flashcard}
           </Link>
         </div>
       </header>
@@ -223,7 +224,7 @@ export default function GrammarPage() {
         {filtered.length === 0 && (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--ash)' }}>
             <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 48, color: 'var(--border)', marginBottom: 12 }}>文</div>
-            <p>{q ? `Không tìm thấy ngữ pháp nào khớp với "${search}"` : 'Không có điểm ngữ pháp nào được trích xuất từ bài này.'}</p>
+            <p>{q ? t.grammar.noMatch(search) : t.grammar.lesson.empty}</p>
           </div>
         )}
       </main>

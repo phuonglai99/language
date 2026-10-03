@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { speakChinese } from '@/lib/speech';
+import { t } from '@/i18n';
 
 export interface VocabListCardData {
   zh: string;
@@ -58,7 +59,7 @@ export function VocabListCard({ item, accent = '#3b82f6', num, href, onClick, on
       {/* Speak button */}
       <button
         onClick={e => { e.preventDefault(); e.stopPropagation(); speak(item.zh); }}
-        title="Phát âm"
+        title={t.common.speak}
         style={{ background: 'var(--paper-alt)', border: '1px solid var(--border)', borderRadius: '50%', cursor: 'pointer', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0, transition: 'background 0.12s' }}
         onMouseEnter={e => (e.currentTarget.style.background = accent + '22')}
         onMouseLeave={e => (e.currentTarget.style.background = 'var(--paper-alt)')}>

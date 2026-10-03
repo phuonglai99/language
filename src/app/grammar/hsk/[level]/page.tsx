@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { HanziiGrammar } from '@/types';
 import { Pagination } from '@/app/components/Pagination';
 import { UNLEVELED_LABEL } from '@/shared/grammar';
+import { t } from '@/i18n';
 
 const LEVEL_COLOR: Record<string, string> = {
   HSK1: '#22c55e', HSK2: '#3b82f6', HSK3: '#f59e0b',
@@ -48,7 +49,7 @@ function GrammarSection({
 
           {g.examples.length > 0 && (
             <div>
-              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ash-light)', marginBottom: 10 }}>Ví dụ</div>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ash-light)', marginBottom: 10 }}>{t.grammar.section.examples}</div>
               {g.examples.map((ex, i) => (
                 <div key={i} style={{ padding: '10px 14px', background: 'var(--paper-alt)', border: '1px solid var(--border)', borderRadius: 6, marginBottom: 6 }}>
                   <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 15, color: 'var(--ink)', marginBottom: 3 }}>{ex.zh}</div>
@@ -110,14 +111,14 @@ export default function HanziiGrammarLevelPage() {
         <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', gap: 14 }}>
           <Link href="/" style={{ textDecoration: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 13, flexShrink: 0, transition: 'color 0.15s' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}>← Về</Link>
+            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}>{t.common.back}</Link>
           <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.12)', flexShrink: 0 }} />
           <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: 20, background: accent, color: '#fff', fontSize: 12, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em', flexShrink: 0 }}>{level}</span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>Ngữ pháp</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{t.common.features.grammar}</div>
             {!loading && (
               <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 1 }}>
-                {filtered.length} điểm ngữ pháp
+                {t.grammar.pointCount(filtered.length)}
               </div>
             )}
           </div>
@@ -126,7 +127,7 @@ export default function HanziiGrammarLevelPage() {
             <input
               value={search}
               onChange={e => { setSearch(e.target.value); setOpenIdx(null); setPage(1); }}
-              placeholder="Tìm ngữ pháp…"
+              placeholder={t.grammar.searchPlaceholder}
               style={{ padding: '7px 12px 7px 30px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 20, color: '#fff', fontSize: 12, fontFamily: 'Be Vietnam Pro, sans-serif', outline: 'none', width: 170 }}
             />
           </div>
@@ -155,7 +156,7 @@ export default function HanziiGrammarLevelPage() {
 
       <main style={{ maxWidth: 900, margin: '0 auto', padding: '24px 24px 80px' }}>
         {loading && (
-          <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--ash)', fontSize: 14 }}>Đang tải…</div>
+          <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--ash)', fontSize: 14 }}>{t.common.loading}</div>
         )}
 
         {!loading && pageItems.map((g, i) => (
@@ -170,7 +171,7 @@ export default function HanziiGrammarLevelPage() {
         {!loading && filtered.length === 0 && (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--ash)' }}>
             <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 48, color: 'var(--border)', marginBottom: 12 }}>文</div>
-            <p>{q ? `Không tìm thấy ngữ pháp nào khớp với "${search}"` : 'Chưa có dữ liệu ngữ pháp. Chạy scripts/crawl-hanzii-grammar.mjs để tải về.'}</p>
+            <p>{q ? t.grammar.noMatch(search) : t.grammar.level.empty}</p>
           </div>
         )}
 

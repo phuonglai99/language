@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, type CSSProperties }
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { locateSentenceSpans } from '@/lib/dictation';
+import { t } from '@/i18n';
 
 type AlignSentence = {
   key: string;
@@ -115,7 +116,7 @@ export default function AlignEditorPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [saving, setSaving] = useState(false);
-  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [saveMsg, setSaveMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [dirty, setDirty] = useState(false);
   const [clipPlaying, setClipPlaying] = useState(false);
 
@@ -329,11 +330,11 @@ export default function AlignEditorPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lưu thất bại');
+      if (!res.ok) throw new Error(data.error || t.dictation.align.editor.saveFailed);
       setDirty(false);
-      setSaveMsg(data.contentUpdated ? 'Đã lưu timestamps và gắn lại text.' : 'Đã lưu timestamps.');
+      setSaveMsg({ text: data.contentUpdated ? t.dictation.align.editor.savedWithText : t.dictation.align.editor.saved, ok: true });
     } catch (err) {
-      setSaveMsg(err instanceof Error ? err.message : 'Lưu thất bại');
+      setSaveMsg({ text: err instanceof Error ? err.message : t.dictation.align.editor.saveFailed, ok: false });
     } finally {
       setSaving(false);
     }
@@ -405,7 +406,7 @@ export default function AlignEditorPage() {
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>
-        Đang tải…
+        {t.common.loading}
       </div>
     );
   }
@@ -413,8 +414,8 @@ export default function AlignEditorPage() {
   if (notFound || !lesson) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-        <div style={{ fontSize: 16, color: 'var(--ink)', fontWeight: 600 }}>Không tìm thấy bài</div>
-        <Link href="/dictation/align" style={{ color: 'var(--red)', textDecoration: 'none', fontSize: 13 }}>← Danh sách cắt audio</Link>
+        <div style={{ fontSize: 16, color: 'var(--ink)', fontWeight: 600 }}>{t.dictation.align.editor.notFound}</div>
+        <Link href="/dictation/align" style={{ color: 'var(--red)', textDecoration: 'none', fontSize: 13 }}>{t.dictation.align.editor.backToList}</Link>
       </div>
     );
   }
@@ -431,7 +432,7 @@ export default function AlignEditorPage() {
           <Link href="/dictation/align" style={{ color: 'rgba(200,191,176,0.6)', textDecoration: 'none', fontSize: 13, flexShrink: 0 }}
             onMouseEnter={e => (e.currentTarget.style.color = '#f5f1e8')}
             onMouseLeave={e => (e.currentTarget.style.color = 'rgba(200,191,176,0.6)')}>
-            ← Cắt thủ công
+            {t.dictation.align.editor.backToAlign}
           </Link>
           <span style={{ color: 'rgba(255,255,255,0.15)' }}>|</span>
           <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, background: levelColor, color: 'white', fontSize: 9.5, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace' }}>
@@ -441,7 +442,7 @@ export default function AlignEditorPage() {
             {lesson.title_zh_simplified}
           </span>
           <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(200,191,176,0.5)', flexShrink: 0 }}>
-            {doneCount}/{sentences.length} mốc · {textCount} text
+            {t.dictation.align.editor.headerStats(doneCount, sentences.length, textCount)}
           </span>
           <button
             onClick={() => void save()}
@@ -453,7 +454,7 @@ export default function AlignEditorPage() {
               fontFamily: 'Be Vietnam Pro, sans-serif',
             }}
           >
-            {saving ? 'Đang lưu…' : 'Lưu DB'}
+            {saving ? t.common.saving : t.dictation.align.editor.save}
           </button>
         </div>
       </header>
@@ -462,17 +463,17 @@ export default function AlignEditorPage() {
         {saveMsg && (
           <div style={{
             padding: '8px 12px', borderRadius: 8, fontSize: 12,
-            background: saveMsg.startsWith('Đã lưu') ? 'rgba(22,163,74,0.1)' : 'rgba(220,38,38,0.1)',
-            color: saveMsg.startsWith('Đã lưu') ? '#16a34a' : '#dc2626',
+            background: saveMsg.ok ? 'rgba(22,163,74,0.1)' : 'rgba(220,38,38,0.1)',
+            color: saveMsg.ok ? '#16a34a' : '#dc2626',
             fontFamily: 'Be Vietnam Pro, sans-serif',
           }}>
-            {saveMsg}
+            {saveMsg.text}
           </div>
         )}
 
         <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
           {!lesson.audio_url ? (
-            <div style={{ color: '#dc2626', fontSize: 13 }}>Bài này không có audio_url.</div>
+            <div style={{ color: '#dc2626', fontSize: 13 }}>{t.dictation.align.editor.noAudio}</div>
           ) : (
             <>
               <audio ref={audioRef} src={lesson.audio_url} preload="metadata" />
@@ -486,10 +487,10 @@ export default function AlignEditorPage() {
                 <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: 'var(--ink)', minWidth: 110 }}>
                   {formatTime(currentTime)} / {formatTime(duration || null)}
                 </div>
-                <button onClick={() => markStart()} style={btnStyle}>[ Start</button>
-                <button onClick={() => markEnd()} style={btnStyle}>End ]</button>
+                <button onClick={() => markStart()} style={btnStyle}>{t.dictation.align.editor.markStart}</button>
+                <button onClick={() => markEnd()} style={btnStyle}>{t.dictation.align.editor.markEnd}</button>
                 <button onClick={() => playClip()} disabled={current?.start == null || current?.end == null} style={btnStyle}>
-                  ▶ Câu này
+                  {t.dictation.align.editor.playClip}
                 </button>
                 <div style={{ flex: 1 }} />
                 {[0.75, 1, 1.25].map(rate => (
@@ -533,7 +534,7 @@ export default function AlignEditorPage() {
                 )}
               </div>
               <div style={{ marginTop: 8, fontSize: 11, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace' }}>
-                Space play/pause · [ start · ] end (nhảy câu tiếp) · Enter nghe clip · ↑↓ câu · A gắn text đang chọn · ⌘S lưu
+                {t.dictation.align.editor.shortcutsHint}
               </div>
             </>
           )}
@@ -542,8 +543,8 @@ export default function AlignEditorPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) minmax(320px, 1fr)', gap: 14, minHeight: 0 }}>
           <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 420 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ash)' }}>Câu</span>
-              <button onClick={() => addSentence(currentIndex)} style={{ ...btnStyle, padding: '4px 10px' }}>+ Thêm câu</button>
+              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ash)' }}>{t.dictation.align.editor.sentences}</span>
+              <button onClick={() => addSentence(currentIndex)} style={{ ...btnStyle, padding: '4px 10px' }}>{t.dictation.align.editor.addSentence}</button>
             </div>
             <div ref={listRef} style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
               {sentences.map((s, i) => {
@@ -580,7 +581,7 @@ export default function AlignEditorPage() {
                       >✕</button>
                     </div>
                     <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 15, color: 'var(--ink)', lineHeight: 1.5 }}>
-                      {s.hanzi || <span style={{ color: 'var(--ash-light)', fontStyle: 'italic' }}>Chưa gắn text</span>}
+                      {s.hanzi || <span style={{ color: 'var(--ash-light)', fontStyle: 'italic' }}>{t.dictation.align.editor.noText}</span>}
                     </div>
                     {s.pinyin ? (
                       <div style={{ fontFamily: 'Be Vietnam Pro, sans-serif', fontSize: 12, color: 'var(--ash)', marginTop: 4, lineHeight: 1.45 }}>
@@ -594,9 +595,9 @@ export default function AlignEditorPage() {
 
             {current && (
               <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ fontSize: 11, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace' }}>Câu #{currentIndex + 1}</div>
+                <div style={{ fontSize: 11, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace' }}>{t.dictation.align.editor.sentenceNumber(currentIndex + 1)}</div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <label style={labelStyle}>Start</label>
+                  <label style={labelStyle}>{t.dictation.align.editor.start}</label>
                   <input
                     value={current.start == null ? '' : String(current.start)}
                     onChange={e => patchSentence(currentIndex, { start: parseTime(e.target.value) })}
@@ -607,7 +608,7 @@ export default function AlignEditorPage() {
                   <button onClick={() => nudge('start', 0.1)} style={btnStyle}>+0.1</button>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <label style={labelStyle}>End</label>
+                  <label style={labelStyle}>{t.dictation.align.editor.end}</label>
                   <input
                     value={current.end == null ? '' : String(current.end)}
                     onChange={e => patchSentence(currentIndex, { end: parseTime(e.target.value) })}
@@ -620,7 +621,7 @@ export default function AlignEditorPage() {
                 <textarea
                   value={current.hanzi}
                   onChange={e => patchSentence(currentIndex, { hanzi: e.target.value })}
-                  placeholder="Hán tự của câu — chọn trên raw text rồi bấm Gắn / phím A"
+                  placeholder={t.dictation.align.editor.hanziPlaceholder}
                   rows={2}
                   style={{
                     width: '100%', boxSizing: 'border-box', resize: 'vertical',
@@ -632,7 +633,7 @@ export default function AlignEditorPage() {
                 <textarea
                   value={current.pinyin}
                   onChange={e => patchSentence(currentIndex, { pinyin: e.target.value })}
-                  placeholder="Pinyin"
+                  placeholder={t.dictation.align.editor.pinyinPlaceholder}
                   rows={2}
                   style={{
                     width: '100%', boxSizing: 'border-box', resize: 'vertical',
@@ -647,9 +648,9 @@ export default function AlignEditorPage() {
 
           <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 420 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ash)' }}>Raw text</span>
+              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ash)' }}>{t.dictation.align.editor.rawText}</span>
               <button onClick={assignSelection} style={{ ...btnStyle, borderColor: levelColor, color: levelColor }}>
-                Gắn đoạn đang chọn vào câu #{currentIndex + 1}
+                {t.dictation.align.editor.assignSelection(currentIndex + 1)}
               </button>
             </div>
             <div
@@ -706,7 +707,7 @@ export default function AlignEditorPage() {
               })}
             </div>
             <div style={{ fontSize: 11, color: 'var(--ash)' }}>
-              Bôi đen đoạn tương ứng với câu đang chọn, rồi bấm nút gắn (hoặc phím A). Alt+mouseup cũng gắn luôn.
+              {t.dictation.align.editor.rawTextHint}
             </div>
           </div>
         </div>

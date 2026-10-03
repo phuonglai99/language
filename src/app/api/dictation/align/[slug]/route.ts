@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPassage, savePassageAlignment } from '@/server';
 import type { SentenceTimestamp } from '@/types/api';
 import { cleanHanzi, extractSentences, remapContentToSentences } from '@/lib/dictation';
+import { t } from '@/i18n';
 
 export const runtime = 'nodejs';
 
@@ -11,18 +12,18 @@ export async function GET(
 ) {
   const { slug } = await params;
   const lesson = await getPassage(slug);
-  if (!lesson) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!lesson) return NextResponse.json({ error: t.api.common.notFound }, { status: 404 });
 
-  const tsByIndex = new Map((lesson.sentence_timestamps ?? []).map(t => [t.index, t]));
+  const tsByIndex = new Map((lesson.sentence_timestamps ?? []).map(mark => [mark.index, mark]));
   const sentences = extractSentences(lesson.content).map(s => {
-    const t = tsByIndex.get(s.index);
+    const mark = tsByIndex.get(s.index);
     return {
       index: s.index,
       hanzi: s.hanzi,
       pinyin: s.pinyin,
       wordCount: s.wordCount,
-      start: t?.start ?? null,
-      end: t?.end ?? null,
+      start: mark?.start ?? null,
+      end: mark?.end ?? null,
     };
   });
 
@@ -66,11 +67,11 @@ export async function PUT(
 ) {
   const { slug } = await params;
   const lesson = await getPassage(slug);
-  if (!lesson) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!lesson) return NextResponse.json({ error: t.api.common.notFound }, { status: 404 });
 
   const body = await req.json() as AlignPayload;
   if (!Array.isArray(body.sentences) || body.sentences.length === 0) {
-    return NextResponse.json({ error: 'sentences required' }, { status: 400 });
+    return NextResponse.json({ error: t.api.dictationAlign.sentencesRequired }, { status: 400 });
   }
 
   const incoming: { hanzi: string; pinyin: string; start: number | null; end: number | null }[] = [];
@@ -80,7 +81,7 @@ export async function PUT(
     const start = asTime(s.start);
     const end = asTime(s.end);
     if (start != null && end != null && end <= start) {
-      return NextResponse.json({ error: `Câu ${i + 1}: end phải lớn hơn start` }, { status: 400 });
+      return NextResponse.json({ error: t.api.dictationAlign.endBeforeStart(i + 1) }, { status: 400 });
     }
     incoming.push({ hanzi, pinyin: (s.pinyin ?? '').trim(), start, end });
   }
@@ -93,7 +94,7 @@ export async function PUT(
   if (!sameShape) {
     const emptyAt = incoming.findIndex(s => !s.hanzi);
     if (emptyAt >= 0) {
-      return NextResponse.json({ error: `Câu ${emptyAt + 1} chưa gắn text` }, { status: 400 });
+      return NextResponse.json({ error: t.api.dictationAlign.sentenceMissingText(emptyAt + 1) }, { status: 400 });
     }
   }
 
@@ -105,7 +106,7 @@ export async function PUT(
       end: s.end,
     }));
     const ok = await savePassageAlignment(slug, timestamps);
-    if (!ok) return NextResponse.json({ error: 'Save failed' }, { status: 500 });
+    if (!ok) return NextResponse.json({ error: t.api.dictationAlign.saveFailed }, { status: 500 });
   } else {
     const content = remapContentToSentences(
       lesson.content,
@@ -122,7 +123,7 @@ export async function PUT(
       end: s.end,
     }));
     const ok = await savePassageAlignment(slug, timestamps, content);
-    if (!ok) return NextResponse.json({ error: 'Save failed' }, { status: 500 });
+    if (!ok) return NextResponse.json({ error: t.api.dictationAlign.saveFailed }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, timestamps, contentUpdated: !sameShape });

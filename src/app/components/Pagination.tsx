@@ -1,4 +1,5 @@
 'use client';
+import { t } from '@/i18n';
 
 interface PaginationProps {
   currentPage: number;
@@ -32,7 +33,7 @@ export function Pagination({ currentPage, totalPages, onPageChange, accent = '#3
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
           style={{ ...btnBase, padding: '8px 18px', background: currentPage === 1 ? 'var(--border)' : 'var(--card-bg)', color: currentPage === 1 ? 'var(--ash-light)' : 'var(--ink)', cursor: currentPage === 1 ? 'default' : 'pointer', boxShadow: currentPage === 1 ? 'none' : '0 1px 4px rgba(0,0,0,0.08)' }}>
-          ← Trước
+          {t.shell.pagination.prev}
         </button>
 
         {pages.map((p, i) =>
@@ -49,13 +50,13 @@ export function Pagination({ currentPage, totalPages, onPageChange, accent = '#3
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
           style={{ ...btnBase, padding: '8px 18px', background: currentPage === totalPages ? 'var(--border)' : 'var(--card-bg)', color: currentPage === totalPages ? 'var(--ash-light)' : 'var(--ink)', cursor: currentPage === totalPages ? 'default' : 'pointer', boxShadow: currentPage === totalPages ? 'none' : '0 1px 4px rgba(0,0,0,0.08)' }}>
-          Sau →
+          {t.shell.pagination.next}
         </button>
       </div>
 
       {total !== undefined && pageSize !== undefined && (
         <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--ash-light)' }}>
-          Trang {currentPage}/{totalPages} · {total} mục
+          {t.shell.pagination.summary(currentPage, totalPages, total)}
         </div>
       )}
     </div>

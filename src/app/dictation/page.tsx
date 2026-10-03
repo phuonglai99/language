@@ -2,6 +2,7 @@
 import { useState, useEffect, useTransition, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { t } from '@/i18n';
 
 type DictationLesson = {
   slug: string;
@@ -49,7 +50,7 @@ function AlignmentStatusBadge({ status }: { status: AlignmentStatus }) {
       fontFamily: 'JetBrains Mono, monospace', fontWeight: 700,
       letterSpacing: '0.06em', whiteSpace: 'nowrap',
     }}>
-      {status}
+      {t.common.alignmentStatus[status]}
     </span>
   );
 }
@@ -99,15 +100,15 @@ function DictationPageInner() {
       <header style={{ background: 'var(--sidebar-bg)', borderBottom: '1px solid rgba(255,255,255,0.07)', position: 'sticky', top: 0, zIndex: 50 }}>
         <div style={{ maxWidth: 1080, margin: '0 auto', padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 20, fontWeight: 700, color: '#f5f1e8' }}>听写</span>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.18em', color: 'var(--red)', textTransform: 'uppercase' }}>Nghe chép chính tả</span>
+            <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 20, fontWeight: 700, color: '#f5f1e8' }}>{t.dictation.list.titleZh}</span>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.18em', color: 'var(--red)', textTransform: 'uppercase' }}>{t.dictation.list.title}</span>
           </div>
           <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
             <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'rgba(200,191,176,0.5)', fontSize: 13, pointerEvents: 'none' }}>🔍</span>
             <input
               value={searchVal}
               onChange={e => handleSearch(e.target.value)}
-              placeholder="Tìm bài nghe…"
+              placeholder={t.dictation.list.searchPlaceholder}
               style={{
                 width: '100%', boxSizing: 'border-box', padding: '7px 10px 7px 32px',
                 background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
@@ -121,10 +122,10 @@ function DictationPageInner() {
             background: 'rgba(255,255,255,0.08)', color: '#f5f1e8',
             fontSize: 12, fontFamily: 'Be Vietnam Pro, sans-serif',
           }}>
-            Cắt thủ công
+            {t.dictation.manualAlign}
           </Link>
           <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(200,191,176,0.5)', whiteSpace: 'nowrap' }}>
-            <strong style={{ color: '#f5f1e8' }}>{lessons.length}</strong> bài
+            <strong style={{ color: '#f5f1e8' }}>{lessons.length}</strong>{t.common.lessonCountSuffix}
           </span>
         </div>
       </header>
@@ -141,7 +142,7 @@ function DictationPageInner() {
               transition: 'all 0.15s',
             }}
           >
-            Tất cả
+            {t.common.all}
           </button>
           {HSK_LEVELS.map(lvl => (
             <button
@@ -178,16 +179,16 @@ function DictationPageInner() {
                   transition: 'all 0.15s',
                 }}
               >
-                {nextStatus}
+                {t.common.alignmentStatus[nextStatus]}
               </button>
             );
           })}
         </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>Đang tải…</div>
+          <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>{t.common.loading}</div>
         ) : lessons.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)' }}>Không tìm thấy bài nào.</div>
+          <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)' }}>{t.common.emptyLessons}</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
             {lessons.map(l => {
@@ -249,7 +250,7 @@ function DictationPageInner() {
                         ))}
                       </div>
                       <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--ash)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                        {l.vocabCount ?? 0} từ
+                        {t.dictation.list.vocabCount(l.vocabCount ?? 0)}
                       </span>
                     </div>
                   </div>
@@ -266,7 +267,7 @@ function DictationPageInner() {
 
 export default function DictationPage() {
   return (
-    <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--ash)' }}>Đang tải…</div>}>
+    <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--ash)' }}>{t.common.loading}</div>}>
       <DictationPageInner />
     </Suspense>
   );

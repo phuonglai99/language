@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { t } from '@/i18n';
 
 export type Crumb = {
   href?: string;
@@ -7,7 +8,7 @@ export type Crumb = {
 
 export function ReadingBreadcrumb({ items }: { items: Crumb[] }) {
   return (
-    <nav className="reading-crumb" aria-label="Đường dẫn">
+    <nav className="reading-crumb" aria-label={t.reading.breadcrumb.ariaLabel}>
       {items.map((item, i) => (
         <span key={`${item.label}-${i}`} className="reading-crumb-item">
           {i > 0 && <span className="reading-crumb-sep" aria-hidden="true">{'>'}</span>}

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import type { Lesson } from '@/types';
 import { isHskWordList, lessonGrammarHref } from '@/shared/lessons';
 import { siteConfig } from '@/config/site';
+import { t } from '@/i18n';
 
 type LessonMeta = Omit<Lesson, 'vocab' | 'grammar'> & { vocabCount: number; grammarCount: number };
 
@@ -13,9 +14,9 @@ const LEVEL_COLOR: Record<string, string> = {
 };
 
 const MODE_BUTTONS = [
-  { href: (id: string) => `/lesson/${id}`,            icon: '卡', label: 'Flashcard', bg: '#3b82f6',   fg: '#fff' },
-  { href: (id: string) => `/lesson/${id}?mode=quiz`,  icon: '测', label: 'Kiểm tra',  bg: '#e5484d',   fg: '#fff' },
-  { href: (id: string) => `/lesson/${id}?mode=match`, icon: '配', label: 'Ghép thẻ', bg: '#d97706',   fg: '#fff' },
+  { href: (id: string) => `/lesson/${id}`,            icon: '卡', label: t.common.features.flashcard, bg: '#3b82f6',   fg: '#fff' },
+  { href: (id: string) => `/lesson/${id}?mode=quiz`,  icon: '测', label: t.common.features.quiz, bg: '#e5484d',   fg: '#fff' },
+  { href: (id: string) => `/lesson/${id}?mode=match`, icon: '配', label: t.common.features.match, bg: '#d97706',   fg: '#fff' },
 ];
 
 export default function Home() {
@@ -35,13 +36,13 @@ export default function Home() {
 
   async function handleUpload(file: File) {
     setUploading(true); setError('');
-    setProgress(file.name.endsWith('.xlsx') || file.name.endsWith('.xls') ? 'Đang đọc file Excel...' : 'Claude đang phân tích bài học...');
+    setProgress(file.name.endsWith('.xlsx') || file.name.endsWith('.xls') ? t.home.upload.readingExcel : t.home.upload.analyzing);
     try {
       const fd = new FormData();
       fd.append('file', file);
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Upload thất bại');
+      if (!res.ok) throw new Error(data.error || t.home.upload.failed);
       setProgress('');
       fetchLessons();
     } catch (e) {
@@ -54,7 +55,7 @@ export default function Home() {
   }
 
   async function deleteLesson(id: string) {
-    if (!confirm('Xoá bài học này?')) return;
+    if (!confirm(t.home.deleteConfirm)) return;
     await fetch(`/api/lessons/${id}`, { method: 'DELETE' });
     fetchLessons();
   }
@@ -79,10 +80,10 @@ export default function Home() {
           {lessons.length > 0 && (
             <div style={{ display: 'flex', gap: 8, marginLeft: 8 }}>
               <span style={{ padding: '4px 12px', background: 'rgba(255,255,255,0.09)', borderRadius: 20, fontSize: 12, color: 'rgba(255,255,255,0.75)', fontFamily: 'JetBrains Mono, monospace' }}>
-                <strong style={{ color: '#fff' }}>{lessons.length}</strong> bài học
+                <strong style={{ color: '#fff' }}>{lessons.length}</strong> {t.home.header.lessonsUnit}
               </span>
               <span style={{ padding: '4px 12px', background: 'rgba(255,255,255,0.09)', borderRadius: 20, fontSize: 12, color: 'rgba(255,255,255,0.75)', fontFamily: 'JetBrains Mono, monospace' }}>
-                <strong style={{ color: '#fff' }}>{totalVocab}</strong> từ vựng
+                <strong style={{ color: '#fff' }}>{totalVocab}</strong> {t.home.header.vocabUnit}
               </span>
             </div>
           )}
@@ -95,7 +96,7 @@ export default function Home() {
               fontSize: 13, fontWeight: 600, transition: 'background 0.15s', userSelect: 'none',
               boxShadow: '0 2px 8px rgba(74,114,160,0.4)',
             }}>
-              {uploading ? `⏳ ${progress}` : '+ Import bài học'}
+              {uploading ? t.home.header.uploadingButton(progress) : t.home.header.importButton}
               <input ref={fileRef} type="file" accept=".docx,.xlsx,.xls" style={{ display: 'none' }}
                 disabled={uploading} onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
             </label>
@@ -118,7 +119,7 @@ export default function Home() {
             <span style={{ fontSize: 18 }}>⏳</span>
             <div>
               <div style={{ fontWeight: 600, marginBottom: 2 }}>{progress}</div>
-              <div style={{ fontSize: 11, opacity: 0.7 }}>Có thể mất 30–60 giây cho file .docx</div>
+              <div style={{ fontSize: 11, opacity: 0.7 }}>{t.home.upload.durationHint}</div>
             </div>
           </div>
         )}
@@ -130,13 +131,13 @@ export default function Home() {
               <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 52, color: '#9ca3af' }}>汉</span>
             </div>
             <div>
-              <p style={{ color: '#1f2937', fontSize: 18, fontWeight: 700, margin: '0 0 8px' }}>Chưa có bài học nào</p>
+              <p style={{ color: '#1f2937', fontSize: 18, fontWeight: 700, margin: '0 0 8px' }}>{t.home.empty.title}</p>
               <p style={{ color: '#6b7280', fontSize: 13, margin: 0, maxWidth: 360, lineHeight: 1.6 }}>
-                Import file <strong>.docx</strong> hoặc <strong>.xlsx</strong> — Claude tự động trích xuất từ vựng &amp; ngữ pháp cho bạn.
+                {t.home.empty.description.before}<strong>{t.home.empty.description.docx}</strong>{t.home.empty.description.or}<strong>{t.home.empty.description.xlsx}</strong>{t.home.empty.description.after}
               </p>
             </div>
             <label style={{ padding: '11px 28px', background: '#3b82f6', color: 'white', borderRadius: 24, fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 12px rgba(74,114,160,0.35)' }}>
-              + Tải lên bài học đầu tiên
+              {t.home.empty.uploadFirst}
               <input type="file" accept=".docx,.xlsx,.xls" style={{ display: 'none' }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
             </label>
@@ -211,11 +212,11 @@ function LessonCard({ lesson: l, accent, onDelete }: { lesson: LessonMeta; accen
         {/* Stats chips */}
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
           <span style={{ padding: '3px 10px', background: '#f3f4f6', borderRadius: 20, fontSize: 11, color: '#374151', fontFamily: 'JetBrains Mono, monospace' }}>
-            <strong>{l.vocabCount}</strong> từ vựng
+            <strong>{l.vocabCount}</strong> {t.home.card.vocabUnit}
           </span>
           {!wordList && (
             <span style={{ padding: '3px 10px', background: '#f3f4f6', borderRadius: 20, fontSize: 11, color: '#374151', fontFamily: 'JetBrains Mono, monospace' }}>
-              <strong>{l.grammarCount}</strong> ngữ pháp
+              <strong>{l.grammarCount}</strong> {t.home.card.grammarUnit}
             </span>
           )}
         </div>
@@ -245,7 +246,7 @@ function LessonCard({ lesson: l, accent, onDelete }: { lesson: LessonMeta; accen
 
       {/* Grammar + Delete */}
       <div style={{ padding: '0 12px 12px', display: 'flex', gap: 6 }}>
-        <Link href={lessonGrammarHref(l.id, l.level, l.grammarCount)} title={wordList ? `Ngữ pháp ${l.level}` : undefined} style={{
+        <Link href={lessonGrammarHref(l.id, l.level, l.grammarCount)} title={wordList ? t.home.card.grammarButtonLevel(l.level) : undefined} style={{
           flex: 1, textAlign: 'center', padding: '7px 0',
           border: `1.5px solid ${accent}40`, color: accent,
           borderRadius: 10, fontSize: 11, fontWeight: 600, textDecoration: 'none',
@@ -254,10 +255,10 @@ function LessonCard({ lesson: l, accent, onDelete }: { lesson: LessonMeta; accen
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = accent + '14'; (e.currentTarget as HTMLElement).style.borderColor = accent; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.borderColor = accent + '40'; }}
         >
-          文 {wordList ? `Ngữ pháp ${l.level}` : 'Ngữ pháp'}
+          文 {wordList ? t.home.card.grammarButtonLevel(l.level) : t.common.features.grammar}
         </Link>
         {/* HSK word lists come from Excel and cannot be deleted (the API refuses). */}
-        {!wordList && <button onClick={onDelete} title="Xoá bài học" style={{
+        {!wordList && <button onClick={onDelete} title={t.home.card.deleteTitle} style={{
           width: 34, height: 34, border: '1.5px solid #e5e7eb',
           borderRadius: 10, background: 'transparent', color: '#9ca3af',
           cursor: 'pointer', fontSize: 15, flexShrink: 0, transition: 'all 0.15s',

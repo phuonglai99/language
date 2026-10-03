@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { VocabListCard } from '@/app/components/VocabListCard';
 import { Pagination } from '@/app/components/Pagination';
 import { speakChinese } from '@/lib/speech';
+import { t } from '@/i18n';
 
 interface VocabItem {
   lessonId: string; lessonTitle: string;
@@ -54,19 +55,19 @@ export default function VocabLevelPage() {
           <Link href="/" style={{ textDecoration: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, transition: 'color 0.15s' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
             onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}>
-            ← Về trang chủ
+            {t.common.backHome}
           </Link>
           <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.12)' }} />
           <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: 20, background: accent, color: '#fff', fontSize: 12, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em', flexShrink: 0 }}>{level}</span>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>Từ vựng</span>
-          {!loading && <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{filtered.length} từ</span>}
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{t.common.features.vocab}</span>
+          {!loading && <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{t.vocab.level.wordCount(filtered.length)}</span>}
           {/* Search */}
           <div style={{ marginLeft: 'auto', position: 'relative' }}>
             <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>🔍</span>
             <input
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Lọc từ…"
+              placeholder={t.vocab.level.filterPlaceholder}
               style={{ padding: '7px 12px 7px 30px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 20, color: '#fff', fontSize: 12, fontFamily: 'Be Vietnam Pro, sans-serif', outline: 'none', width: 170 }}
             />
           </div>
@@ -75,11 +76,11 @@ export default function VocabLevelPage() {
 
       <main style={{ maxWidth: 900, margin: '0 auto', padding: '24px 24px 80px' }}>
         {loading && (
-          <div style={{ textAlign: 'center', padding: '80px 0', color: '#9ca3af', fontSize: 14 }}>Đang tải…</div>
+          <div style={{ textAlign: 'center', padding: '80px 0', color: '#9ca3af', fontSize: 14 }}>{t.common.loading}</div>
         )}
 
         {!loading && filtered.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '80px 0', color: '#9ca3af', fontSize: 14 }}>Không có từ vựng nào</div>
+          <div style={{ textAlign: 'center', padding: '80px 0', color: '#9ca3af', fontSize: 14 }}>{t.vocab.level.empty}</div>
         )}
 
         {!loading && pageItems.length > 0 && (

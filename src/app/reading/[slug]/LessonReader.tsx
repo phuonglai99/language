@@ -4,6 +4,7 @@ import Link from 'next/link';
 import NoteModal from '@/app/components/NoteModal';
 import { ReadingBreadcrumb } from '../ReadingBreadcrumb';
 import { canSpeakChinese, speakChinese } from '@/lib/speech';
+import { t } from '@/i18n';
 
 type Word = {
   hanzi: string; pinyin: string;
@@ -52,7 +53,7 @@ function AlignmentStatusBadge({ status }: { status: AlignmentStatus }) {
       fontSize: 10, color: isChecked ? '#16a34a' : '#c8392b',
       fontFamily: 'JetBrains Mono, monospace', fontWeight: 700,
     }}>
-      {status}
+      {t.common.alignmentStatus[status]}
     </span>
   );
 }
@@ -125,8 +126,8 @@ function WordToken({
             {canSpeakChinese() && (
               <button
                 type="button"
-                aria-label={`Phát âm ${word.hanzi}`}
-                title="Phát âm"
+                aria-label={t.reading.word.speakAria(word.hanzi)}
+                title={t.common.speak}
                 onMouseDown={e => { e.stopPropagation(); e.preventDefault(); speakChinese(word.hanzi); }}
                 style={{ padding: '1px 6px', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6, color: 'rgba(255,255,255,0.85)', cursor: 'pointer', fontSize: 12, lineHeight: 1.4, pointerEvents: 'auto' }}>
                 🔊
@@ -135,7 +136,7 @@ function WordToken({
           </span>
           {/* Vietnamese from user's vocab */}
           {vnResult === 'loading' && (
-            <span style={{ color: 'rgba(200,191,176,0.5)', fontSize: 11 }}>Đang tra…</span>
+            <span style={{ color: 'rgba(200,191,176,0.5)', fontSize: 11 }}>{t.reading.word.lookingUp}</span>
           )}
           {vnResult && vnResult !== 'loading' && vnResult !== 'none' && (
             <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -162,7 +163,7 @@ function WordToken({
           <button
             onMouseDown={e => { e.stopPropagation(); e.preventDefault(); onAddNote({ zh: word.hanzi, py: word.pinyin, vn: (vnResult && vnResult !== 'loading' && vnResult !== 'none') ? vnResult.vn : '', pos: (vnResult && vnResult !== 'loading' && vnResult !== 'none') ? vnResult.pos : '' }); }}
             style={{ marginTop: 4, padding: '3px 8px', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6, color: 'rgba(255,255,255,0.8)', cursor: 'pointer', fontSize: 11, pointerEvents: 'auto', alignSelf: 'flex-start' }}>
-            📝 Ghi chú
+            {t.common.notes}
           </button>
         </span>
       )}
@@ -230,7 +231,7 @@ export default function LessonReader({
   const displayCategories = lesson.categories.filter(cat => !isAlignmentStatus(cat));
   const topic = displayCategories[0] ?? null;
   const crumbItems = [
-    { href: '/reading', label: 'Đọc bài khoá' },
+    { href: '/reading', label: t.common.features.reading },
     { href: `/reading?hsk=${lesson.hsk_level}`, label: `HSK ${lesson.hsk_level}` },
     ...(topic ? [{ href: `/reading?hsk=${lesson.hsk_level}&q=${encodeURIComponent(topic)}`, label: topic }] : []),
     { label: lesson.title_zh_simplified || lesson.title_en },
@@ -249,7 +250,7 @@ export default function LessonReader({
           <Link href="/reading" style={{ color: 'rgba(200,191,176,0.6)', textDecoration: 'none', fontSize: 13, flexShrink: 0, transition: 'color 0.15s' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#f5f1e8')}
             onMouseLeave={e => (e.currentTarget.style.color = 'rgba(200,191,176,0.6)')}>
-            ← Đọc bài khoá
+            {t.reading.lesson.backToReading}
           </Link>
           <span style={{ color: 'rgba(255,255,255,0.15)', flexShrink: 0 }}>|</span>
           <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, background: levelColor, color: 'white', fontSize: 9.5, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em', flexShrink: 0 }}>
@@ -260,17 +261,17 @@ export default function LessonReader({
           </span>
           <div className="reading-header-pager">
             {prev
-              ? <Link href={`/reading/${prev.slug}`} className="reading-header-pager-btn" title={`Bài trước: ${prev.title_zh_simplified || prev.title_en}`} aria-label="Bài trước">‹</Link>
+              ? <Link href={`/reading/${prev.slug}`} className="reading-header-pager-btn" title={t.reading.lesson.prevTitle(prev.title_zh_simplified || prev.title_en)} aria-label={t.reading.lesson.prevAria}>‹</Link>
               : <span className="reading-header-pager-btn is-disabled" aria-disabled="true">‹</span>}
             <span className="reading-header-pager-pos">{`${position.index}/${position.total}`}</span>
             {next
-              ? <Link href={`/reading/${next.slug}`} className="reading-header-pager-btn" title={`Bài sau: ${next.title_zh_simplified || next.title_en}`} aria-label="Bài sau">›</Link>
+              ? <Link href={`/reading/${next.slug}`} className="reading-header-pager-btn" title={t.reading.lesson.nextTitle(next.title_zh_simplified || next.title_en)} aria-label={t.reading.lesson.nextAria}>›</Link>
               : <span className="reading-header-pager-btn is-disabled" aria-disabled="true">›</span>}
           </div>
           <Link href="/notes" style={{ color: 'rgba(200,191,176,0.6)', textDecoration: 'none', fontSize: 13, flexShrink: 0, transition: 'color 0.15s' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#f5f1e8')}
             onMouseLeave={e => (e.currentTarget.style.color = 'rgba(200,191,176,0.6)')}>
-            📝 Ghi chú
+            {t.common.notes}
           </Link>
         </div>
       </header>
@@ -286,7 +287,7 @@ export default function LessonReader({
           <div style={{ fontSize: 15, color: 'var(--ash)', margin: '0 0 10px' }}>{lesson.title_en}</div>
           {lesson.title_zh_traditional !== lesson.title_zh_simplified && (
             <div style={{ fontSize: 12, color: 'var(--ash-light)', fontFamily: 'Noto Serif SC, serif' }}>
-              繁體：{lesson.title_zh_traditional}
+              {t.reading.lesson.traditional(lesson.title_zh_traditional)}
             </div>
           )}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
@@ -297,7 +298,7 @@ export default function LessonReader({
               </span>
             ))}
             <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--ash)', marginLeft: 4 }}>
-              {vocabCount} từ vựng
+              {t.reading.lesson.vocabCount(vocabCount)}
             </span>
           </div>
         </div>
@@ -313,7 +314,7 @@ export default function LessonReader({
         {/* Pinyin toggle + hint row */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <span style={{ fontSize: 11, color: 'var(--ash-light)', fontFamily: 'JetBrains Mono, monospace', fontStyle: 'italic' }}>
-            Nhấn vào từ để tra nghĩa · click lại để đóng
+            {t.reading.lesson.tapHint}
           </span>
           <button
             onClick={() => setShowPinyin(p => !p)}
@@ -327,7 +328,7 @@ export default function LessonReader({
               transition: 'all 0.15s',
             }}
           >
-            {showPinyin ? '拼 Ẩn pinyin' : '拼 Hiện pinyin'}
+            {showPinyin ? t.reading.lesson.hidePinyin : t.reading.lesson.showPinyin}
           </button>
         </div>
 
@@ -358,29 +359,29 @@ export default function LessonReader({
           </div>
         </div>
 
-        <nav className="reading-nav" aria-label="Bài cùng level HSK">
+        <nav className="reading-nav" aria-label={t.reading.lesson.navAria}>
           {prev ? (
             <Link href={`/reading/${prev.slug}`} className="reading-nav-btn">
-              <span className="reading-nav-dir">← Bài trước</span>
+              <span className="reading-nav-dir">{t.reading.lesson.prev}</span>
               <span className="reading-nav-title">{prev.title_zh_simplified || prev.title_en}</span>
               {prev.title_zh_simplified && <span className="reading-nav-en">{prev.title_en}</span>}
             </Link>
           ) : (
             <div className="reading-nav-btn is-disabled">
-              <span className="reading-nav-dir">← Bài trước</span>
-              <span className="reading-nav-title">{`Đầu HSK ${lesson.hsk_level}`}</span>
+              <span className="reading-nav-dir">{t.reading.lesson.prev}</span>
+              <span className="reading-nav-title">{t.reading.lesson.firstOfLevel(lesson.hsk_level)}</span>
             </div>
           )}
           {next ? (
             <Link href={`/reading/${next.slug}`} className="reading-nav-btn reading-nav-next">
-              <span className="reading-nav-dir">Bài sau →</span>
+              <span className="reading-nav-dir">{t.reading.lesson.next}</span>
               <span className="reading-nav-title">{next.title_zh_simplified || next.title_en}</span>
               {next.title_zh_simplified && <span className="reading-nav-en">{next.title_en}</span>}
             </Link>
           ) : (
             <div className="reading-nav-btn reading-nav-next is-disabled">
-              <span className="reading-nav-dir">Bài sau →</span>
-              <span className="reading-nav-title">{`Hết HSK ${lesson.hsk_level}`}</span>
+              <span className="reading-nav-dir">{t.reading.lesson.next}</span>
+              <span className="reading-nav-title">{t.reading.lesson.lastOfLevel(lesson.hsk_level)}</span>
             </div>
           )}
         </nav>

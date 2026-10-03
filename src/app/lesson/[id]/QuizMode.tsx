@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import type { VocabCard } from '@/types';
+import { t } from '@/i18n';
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -45,8 +46,8 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
   const [savedMistakeIds, setSavedMistakeIds] = useState<Map<string, string>>(new Map());
   const [deletedMistakes, setDeletedMistakes] = useState<Set<string>>(new Set());
   const countOptions = [
-    ...COUNT_OPTIONS.filter(n => n <= vocab.length).map(n => ({ label: `${n} câu`, value: n })),
-    { label: 'Tất cả', value: vocab.length },
+    ...COUNT_OPTIONS.filter(n => n <= vocab.length).map(n => ({ label: t.lesson.quiz.countOption(n), value: n })),
+    { label: t.common.all, value: vocab.length },
   ].filter((o, i, arr) => i === 0 || o.value !== arr[i - 1].value);
 
   function buildQuestions(n: number): Question[] {
@@ -125,17 +126,17 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
   if (step === 'config') return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, padding: '48px 24px', width: 'min(440px,100%)' }}>
       <div style={{ textAlign: 'center' }}>
-        <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 40, fontWeight: 700, color: 'var(--red)', lineHeight: 1 }}>测验</div>
-        <div style={{ fontSize: 13, color: 'var(--ash)', marginTop: 6 }}>{vocab.length} từ vựng · trắc nghiệm 4 đáp án</div>
+        <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 40, fontWeight: 700, color: 'var(--red)', lineHeight: 1 }}>{t.lesson.quiz.title}</div>
+        <div style={{ fontSize: 13, color: 'var(--ash)', marginTop: 6 }}>{t.lesson.quiz.subtitle(vocab.length)}</div>
       </div>
 
       {/* Direction */}
       <div style={{ width: '100%' }}>
-        <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--ash-light)', marginBottom: 10 }}>Dạng câu hỏi</div>
+        <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--ash-light)', marginBottom: 10 }}>{t.lesson.quiz.directionHeading}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {([
-            { value: 'zh-to-vn', label: 'Hán tự → Nghĩa tiếng Việt', sub: '看汉字，选越南语意思' },
-            { value: 'vn-to-zh', label: 'Nghĩa tiếng Việt → Hán tự', sub: '看越南语，选汉字' },
+            { value: 'zh-to-vn', ...t.lesson.quiz.directions.zhToVn },
+            { value: 'vn-to-zh', ...t.lesson.quiz.directions.vnToZh },
           ] as { value: Direction; label: string; sub: string }[]).map(o => (
             <button key={o.value} onClick={() => setDirection(o.value)} style={{
               padding: '12px 18px', border: `1.5px solid ${direction === o.value ? 'var(--red)' : 'var(--border)'}`,
@@ -155,7 +156,7 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
 
       {/* Count */}
       <div style={{ width: '100%' }}>
-        <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--ash-light)', marginBottom: 10 }}>Số câu hỏi</div>
+        <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--ash-light)', marginBottom: 10 }}>{t.lesson.quiz.countHeading}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {countOptions.map(o => (
             <button key={o.value} onClick={() => setCount(o.value)} style={{
@@ -174,20 +175,20 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
       <button onClick={startQuiz} style={{
         width: '100%', padding: '14px', background: 'var(--red)', color: 'white',
         border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer',
-      }}>Bắt đầu →</button>
+      }}>{t.common.start}</button>
     </div>
   );
 
   // ── Done ────────────────────────────────────────────────────────────────────
   if (step === 'done') {
     const pct = Math.round(correct / questions.length * 100);
-    const medal = pct >= 90 ? '完美！' : pct >= 70 ? '不错！' : '加油！';
+    const medal = pct >= 90 ? t.lesson.quiz.medals.perfect : pct >= 70 ? t.lesson.quiz.medals.good : t.lesson.quiz.medals.keepGoing;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, padding: '40px 24px', width: 'min(520px,100%)' }}>
         <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 52, fontWeight: 700, color: 'var(--red)', lineHeight: 1 }}>{medal}</div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, width: '100%' }}>
-          {[['Điểm số', `${correct}/${questions.length}`], ['Chính xác', `${pct}%`], ['Thời gian', fmt(elapsed)]].map(([label, value]) => (
+          {[[t.lesson.quiz.stats.score, `${correct}/${questions.length}`], [t.lesson.quiz.stats.accuracy, `${pct}%`], [t.lesson.quiz.stats.time, fmt(elapsed)]].map(([label, value]) => (
             <div key={label} style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 10px', textAlign: 'center' }}>
               <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 20, fontWeight: 700, color: 'var(--red)' }}>{value}</div>
               <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ash-light)', marginTop: 4 }}>{label}</div>
@@ -202,7 +203,7 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
         {missed.length > 0 && (
           <div style={{ width: '100%', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '16px' }}>
             <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--ash-light)', marginBottom: 12 }}>
-              Cần ôn lại · {missed.filter(c => !deletedMistakes.has(c.zh)).length} từ
+              {t.lesson.quiz.reviewHeading(missed.filter(c => !deletedMistakes.has(c.zh)).length)}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {missed.filter(c => !deletedMistakes.has(c.zh)).map(card => (
@@ -217,11 +218,11 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
                         fetch(`/api/notes/items/${itemId}`, { method: 'DELETE' }).catch(() => {});
                         setDeletedMistakes(s => new Set(s).add(card.zh));
                       }}
-                      title="Xoá khỏi Mistake"
+                      title={t.lesson.quiz.removeMistakeTitle}
                       style={{ padding: '3px 8px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--paper-alt)', cursor: 'pointer', fontSize: 11, color: 'var(--ash)', flexShrink: 0, transition: 'background 0.1s, color 0.1s' }}
                       onMouseEnter={e => { e.currentTarget.style.background = 'var(--red-light)'; e.currentTarget.style.color = 'var(--red)'; e.currentTarget.style.borderColor = 'var(--red)'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = 'var(--paper-alt)'; e.currentTarget.style.color = 'var(--ash)'; e.currentTarget.style.borderColor = 'var(--border)'; }}>
-                      🗑 Xoá
+                      {t.lesson.quiz.removeMistake}
                     </button>
                   )}
                 </div>
@@ -231,8 +232,8 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
         )}
 
         <div style={{ display: 'flex', gap: 10, width: '100%' }}>
-          <button onClick={() => setStep('config')} style={{ flex: 1, padding: '12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--card-bg)', cursor: 'pointer', fontSize: 14, color: 'var(--ink)' }}>← Cấu hình lại</button>
-          <button onClick={startQuiz} style={{ flex: 1, padding: '12px', background: 'var(--red)', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Làm lại</button>
+          <button onClick={() => setStep('config')} style={{ flex: 1, padding: '12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--card-bg)', cursor: 'pointer', fontSize: 14, color: 'var(--ink)' }}>{t.lesson.quiz.reconfigure}</button>
+          <button onClick={startQuiz} style={{ flex: 1, padding: '12px', background: 'var(--red)', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>{t.lesson.quiz.retry}</button>
         </div>
       </div>
     );
@@ -244,10 +245,10 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
       {/* Meta row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
         <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--ash)' }}>
-          Câu <strong>{idx + 1}</strong> / {questions.length}
+          {t.lesson.quiz.questionLabel} <strong>{idx + 1}</strong> / {questions.length}
         </div>
         <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--ash)' }}>
-          Đúng: <strong style={{ color: 'var(--green)' }}>{correct}</strong>
+          {t.lesson.quiz.correctLabel} <strong style={{ color: 'var(--green)' }}>{correct}</strong>
         </div>
       </div>
 
@@ -319,13 +320,13 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
 
       {answered && (
         <button onClick={next} style={{ width: '100%', padding: '13px', background: 'var(--red)', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-          {idx + 1 < questions.length ? 'Câu tiếp →' : 'Xem kết quả →'}
+          {idx + 1 < questions.length ? t.lesson.quiz.next : t.lesson.quiz.seeResults}
         </button>
       )}
 
       {answered && (
         <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--ash-light)' }}>
-          Enter để tiếp tục
+          {t.lesson.quiz.enterToContinue}
         </div>
       )}
     </div>

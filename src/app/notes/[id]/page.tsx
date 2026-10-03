@@ -6,6 +6,7 @@ import type { VocabCard } from '@/types';
 import { Pagination } from '@/app/components/Pagination';
 import QuizMode from '../../lesson/[id]/QuizMode';
 import { speakChinese } from '@/lib/speech';
+import { t } from '@/i18n';
 
 interface NoteFolder { id: string; name: string; isSystem: boolean; createdAt: string; itemCount: number; }
 interface NoteItem { id: string; folderId: string; zh: string; py: string; vn: string; pos: string; sourceLessonId: string | null; createdAt: string; }
@@ -104,7 +105,7 @@ export default function NotesFolderPage() {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 40 }}>
         <div style={{ width: '100%', maxWidth: 720, padding: '0 24px' }}>
-          <button onClick={() => setQuizVocab(null)} style={{ marginBottom: 20, padding: '8px 18px', border: '1px solid var(--border)', borderRadius: 20, background: 'var(--card-bg)', cursor: 'pointer', fontSize: 13, color: 'var(--ash)' }}>← Quay lại ghi chú</button>
+          <button onClick={() => setQuizVocab(null)} style={{ marginBottom: 20, padding: '8px 18px', border: '1px solid var(--border)', borderRadius: 20, background: 'var(--card-bg)', cursor: 'pointer', fontSize: 13, color: 'var(--ash)' }}>{t.notes.folder.backToNotes}</button>
           <QuizMode vocab={quizVocab} speak={speak} />
         </div>
       </div>
@@ -117,27 +118,27 @@ export default function NotesFolderPage() {
 
     if (mode === null) return (
       <div style={{ display: 'flex', gap: 8 }}>
-        <Btn ghost onClick={() => { setMode('select'); setSelected(new Set()); }}>Chọn từ</Btn>
-        <Btn primary onClick={() => { setMode('quiz-pick'); setSelected(new Set(items.map(i => i.id))); }} disabled={items.length < 2}>测 Tạo bài kiểm tra</Btn>
+        <Btn ghost onClick={() => { setMode('select'); setSelected(new Set()); }}>{t.notes.folder.selectWords}</Btn>
+        <Btn primary onClick={() => { setMode('quiz-pick'); setSelected(new Set(items.map(i => i.id))); }} disabled={items.length < 2}>{t.notes.folder.createQuiz}</Btn>
       </div>
     );
 
     if (mode === 'select') return (
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', flexShrink: 0 }}>{selected.size} từ</span>
-        <Btn ghost onClick={toggleSelectAll}>{allSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}</Btn>
-        <Btn danger onClick={() => setConfirmDeleteSelected(true)} disabled={selected.size === 0}>Xoá</Btn>
-        <Btn primary onClick={startQuizFromSelected} disabled={selected.size < 2}>测 Kiểm tra</Btn>
-        <Btn ghost onClick={exitMode}>Huỷ</Btn>
+        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', flexShrink: 0 }}>{t.notes.folder.selectedCount(selected.size)}</span>
+        <Btn ghost onClick={toggleSelectAll}>{allSelected ? t.notes.folder.deselectAll : t.notes.folder.selectAll}</Btn>
+        <Btn danger onClick={() => setConfirmDeleteSelected(true)} disabled={selected.size === 0}>{t.notes.actions.delete}</Btn>
+        <Btn primary onClick={startQuizFromSelected} disabled={selected.size < 2}>{t.notes.folder.quiz}</Btn>
+        <Btn ghost onClick={exitMode}>{t.notes.actions.cancel}</Btn>
       </div>
     );
 
     if (mode === 'quiz-pick') return (
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{selected.size} từ</span>
-        <Btn ghost onClick={toggleSelectAll}>{allSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}</Btn>
-        <Btn primary onClick={startQuizFromSelected} disabled={selected.size < 2}>Bắt đầu →</Btn>
-        <Btn ghost onClick={exitMode}>Huỷ</Btn>
+        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{t.notes.folder.selectedCount(selected.size)}</span>
+        <Btn ghost onClick={toggleSelectAll}>{allSelected ? t.notes.folder.deselectAll : t.notes.folder.selectAll}</Btn>
+        <Btn primary onClick={startQuizFromSelected} disabled={selected.size < 2}>{t.common.start}</Btn>
+        <Btn ghost onClick={exitMode}>{t.notes.actions.cancel}</Btn>
       </div>
     );
 
@@ -153,13 +154,13 @@ export default function NotesFolderPage() {
           <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 16, padding: '32px 36px', maxWidth: 360, width: '90%', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}
             onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>🗑</div>
-            <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 700, color: 'var(--ink)' }}>Xoá {selected.size} từ?</h3>
-            <p style={{ margin: '0 0 24px', fontSize: 13, color: 'var(--ash)' }}>Hành động này không thể hoàn tác.</p>
+            <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 700, color: 'var(--ink)' }}>{t.notes.folder.deleteSelectedConfirm(selected.size)}</h3>
+            <p style={{ margin: '0 0 24px', fontSize: 13, color: 'var(--ash)' }}>{t.notes.folder.cannotUndo}</p>
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => setConfirmDeleteSelected(false)}
-                style={{ flex: 1, padding: '11px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--paper-alt)', cursor: 'pointer', fontSize: 14, color: 'var(--ink)' }}>Huỷ</button>
+                style={{ flex: 1, padding: '11px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--paper-alt)', cursor: 'pointer', fontSize: 14, color: 'var(--ink)' }}>{t.notes.actions.cancel}</button>
               <button onClick={deleteSelected}
-                style={{ flex: 1, padding: '11px', border: 'none', borderRadius: 10, background: 'var(--red)', color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>Xoá</button>
+                style={{ flex: 1, padding: '11px', border: 'none', borderRadius: 10, background: 'var(--red)', color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>{t.notes.actions.delete}</button>
             </div>
           </div>
         </div>
@@ -170,7 +171,7 @@ export default function NotesFolderPage() {
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'nowrap' }}>
           <Link href="/notes" style={{ textDecoration: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 13, flexShrink: 0, transition: 'color 0.15s', whiteSpace: 'nowrap' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}>← Ghi chú</Link>
+            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}>{t.notes.folder.back}</Link>
           <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.12)', flexShrink: 0 }} />
 
           {/* Folder name */}
@@ -190,9 +191,9 @@ export default function NotesFolderPage() {
             <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
               {confirmDeleteFolder ? (
                 <>
-                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', alignSelf: 'center', whiteSpace: 'nowrap' }}>Xoá folder?</span>
-                  <button onClick={deleteFolder} style={{ padding: '5px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Xoá</button>
-                  <button onClick={() => setConfirmDeleteFolder(false)} style={{ padding: '5px 8px', background: 'rgba(255,255,255,0.12)', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 12 }}>Huỷ</button>
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', alignSelf: 'center', whiteSpace: 'nowrap' }}>{t.notes.folder.deleteFolderConfirm}</span>
+                  <button onClick={deleteFolder} style={{ padding: '5px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>{t.notes.actions.delete}</button>
+                  <button onClick={() => setConfirmDeleteFolder(false)} style={{ padding: '5px 8px', background: 'rgba(255,255,255,0.12)', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 12 }}>{t.notes.actions.cancel}</button>
                 </>
               ) : (
                 <>
@@ -217,27 +218,27 @@ export default function NotesFolderPage() {
         {/* Quiz-pick mode hint bar */}
         {mode === 'quiz-pick' && (
           <div style={{ background: 'rgba(255,255,255,0.08)', borderTop: '1px solid rgba(255,255,255,0.1)', padding: '8px 24px', fontSize: 12, color: 'rgba(255,255,255,0.7)', textAlign: 'center' }}>
-            Chọn những từ muốn đưa vào bài kiểm tra — bấm card để chọn/bỏ chọn
+            {t.notes.folder.quizPickHint}
           </div>
         )}
         {mode === 'select' && (
           <div style={{ background: 'rgba(255,255,255,0.08)', borderTop: '1px solid rgba(255,255,255,0.1)', padding: '8px 24px', fontSize: 12, color: 'rgba(255,255,255,0.7)', textAlign: 'center' }}>
-            Chọn từ muốn xoá hoặc kiểm tra — bấm card để chọn/bỏ chọn
+            {t.notes.folder.selectHint}
           </div>
         )}
       </header>
 
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px' }}>
         {folder && (
-          <p style={{ fontSize: 13, color: 'var(--ash)', marginBottom: 20 }}>{items.length} từ trong folder này</p>
+          <p style={{ fontSize: 13, color: 'var(--ash)', marginBottom: 20 }}>{t.notes.folder.itemCount(items.length)}</p>
         )}
 
-        {loading && <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--ash)' }}>Đang tải…</div>}
+        {loading && <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--ash)' }}>{t.common.loading}</div>}
 
         {!loading && items.length === 0 && (
           <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--ash)' }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>📝</div>
-            <p style={{ fontSize: 14 }}>Folder này chưa có từ nào.<br />Click vào từ trong bài học để thêm vào đây.</p>
+            <p style={{ fontSize: 14 }}>{t.notes.folder.emptyTitle}<br />{t.notes.folder.emptyHint}</p>
           </div>
         )}
 
@@ -291,7 +292,7 @@ export default function NotesFolderPage() {
                         {item.sourceLessonId && (
                           <Link href={`/lesson/${item.sourceLessonId}?mode=list&word=${encodeURIComponent(item.zh)}`}
                             onClick={e => e.stopPropagation()}
-                            title="Đi đến bài học"
+                            title={t.notes.folder.goToLesson}
                             style={{ width: 26, height: 26, borderRadius: 6, background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 12, color: 'var(--ash)', transition: 'background 0.1s' }}
                             onMouseEnter={e => (e.currentTarget.style.background = 'rgba(59,130,246,0.15)')}
                             onMouseLeave={e => (e.currentTarget.style.background = 'var(--border)')}>→</Link>
@@ -299,13 +300,13 @@ export default function NotesFolderPage() {
                         {confirmDeleteItem === item.id ? (
                           <>
                             <button onClick={e => { e.stopPropagation(); deleteItem(item.id); }}
-                              style={{ height: 26, padding: '0 8px', borderRadius: 6, background: 'var(--red)', border: 'none', cursor: 'pointer', fontSize: 11, color: '#fff', fontWeight: 600 }}>Xoá</button>
+                              style={{ height: 26, padding: '0 8px', borderRadius: 6, background: 'var(--red)', border: 'none', cursor: 'pointer', fontSize: 11, color: '#fff', fontWeight: 600 }}>{t.notes.actions.delete}</button>
                             <button onClick={e => { e.stopPropagation(); setConfirmDeleteItem(null); }}
                               style={{ height: 26, padding: '0 6px', borderRadius: 6, background: 'var(--border)', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--ash)' }}>✕</button>
                           </>
                         ) : (
                           <button onClick={e => { e.stopPropagation(); setConfirmDeleteItem(item.id); }}
-                            title="Xoá"
+                            title={t.notes.actions.delete}
                             style={{ width: 26, height: 26, borderRadius: 6, background: 'var(--border)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: 'var(--ash)', transition: 'background 0.1s, color 0.1s' }}
                             onMouseEnter={e => { e.currentTarget.style.background = 'var(--red-light)'; e.currentTarget.style.color = 'var(--red)'; }}
                             onMouseLeave={e => { e.currentTarget.style.background = 'var(--border)'; e.currentTarget.style.color = 'var(--ash)'; }}>🗑</button>

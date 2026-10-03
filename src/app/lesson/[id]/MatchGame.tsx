@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import type { VocabCard } from '@/types';
+import { t } from '@/i18n';
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -151,27 +152,27 @@ export default function MatchGame({ vocab, lessonId }: MatchGameProps) {
   if (gameState === 'ready') return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 28, padding: '48px 24px', width: 'min(440px,100%)' }}>
       <div style={{ textAlign: 'center' }}>
-        <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 40, fontWeight: 700, color: 'var(--gold)', lineHeight: 1 }}>配对</div>
+        <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 40, fontWeight: 700, color: 'var(--gold)', lineHeight: 1 }}>{t.lesson.match.title}</div>
         <div style={{ fontSize: 13, color: 'var(--ash)', marginTop: 6 }}>
-          Ghép từ với nghĩa đúng · {vocab.length} từ
-          {totalRounds > 1 && ` · ${totalRounds} vòng`}
+          {t.lesson.match.subtitle(vocab.length)}
+          {totalRounds > 1 && t.lesson.match.roundsSuffix(totalRounds)}
         </div>
       </div>
       {highscore !== null && (
         <div style={{ background: 'var(--gold-light)', border: '1px solid var(--gold)', borderRadius: 10, padding: '14px 28px', textAlign: 'center' }}>
-          <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.16em', color: 'var(--gold)', marginBottom: 4 }}>🏆 Kỷ lục tốt nhất</div>
+          <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.16em', color: 'var(--gold)', marginBottom: 4 }}>{t.lesson.match.bestRecord}</div>
           <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 28, fontWeight: 700, color: 'var(--gold)' }}>{fmt(highscore)}</div>
         </div>
       )}
       <div style={{ fontSize: 12, color: 'var(--ash-light)', textAlign: 'center', lineHeight: 1.6 }}>
-        Chọn 1 thẻ từ và 1 thẻ nghĩa khớp nhau.<br />
-        Ghép đúng = thẻ biến mất. Ghép sai = thử lại.
-        {totalRounds > 1 && <><br />Hoàn thành cả {totalRounds} vòng để học toàn bộ {vocab.length} từ.</>}
+        {t.lesson.match.rulePick}<br />
+        {t.lesson.match.ruleResult}
+        {totalRounds > 1 && <><br />{t.lesson.match.ruleAllRounds(totalRounds, vocab.length)}</>}
       </div>
       <button onClick={startGame} style={{
         width: '100%', maxWidth: 280, padding: '14px', background: 'var(--gold)', color: 'white',
         border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer',
-      }}>Bắt đầu →</button>
+      }}>{t.common.start}</button>
     </div>
   );
 
@@ -181,13 +182,13 @@ export default function MatchGame({ vocab, lessonId }: MatchGameProps) {
     const remainingWords = vocab.length - (round + 1) * PAIR_COUNT;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, padding: '40px 24px', width: 'min(440px,100%)' }}>
-        <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 48, fontWeight: 700, color: 'var(--gold)', textAlign: 'center' }}>好！</div>
+        <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 48, fontWeight: 700, color: 'var(--gold)', textAlign: 'center' }}>{t.lesson.match.roundDoneTitle}</div>
         <div style={{ fontSize: 15, color: 'var(--ash)', textAlign: 'center' }}>
-          Vòng {round + 1}/{totalRounds} hoàn thành
+          {t.lesson.match.roundDone(round + 1, totalRounds)}
         </div>
         <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 28px', textAlign: 'center', width: '100%' }}>
           <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 24, fontWeight: 700, color: 'var(--gold)' }}>{fmt(roundElapsed)}</div>
-          <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ash-light)', marginTop: 4 }}>Thời gian vòng này</div>
+          <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ash-light)', marginTop: 4 }}>{t.lesson.match.roundTime}</div>
         </div>
         {/* Overall progress dots */}
         <div style={{ display: 'flex', gap: 6 }}>
@@ -199,11 +200,11 @@ export default function MatchGame({ vocab, lessonId }: MatchGameProps) {
           ))}
         </div>
         <div style={{ fontSize: 13, color: 'var(--ash-light)', textAlign: 'center' }}>
-          Còn {remaining} vòng · {remainingWords} từ chưa học
+          {t.lesson.match.remaining(remaining, remainingWords)}
         </div>
         <div style={{ display: 'flex', gap: 10, width: '100%' }}>
-          <button onClick={() => setGameState('ready')} style={{ flex: 1, padding: '12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--card-bg)', cursor: 'pointer', fontSize: 14, color: 'var(--ink)' }}>← Menu</button>
-          <button onClick={nextRound} style={{ flex: 1, padding: '12px', background: 'var(--gold)', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Vòng tiếp →</button>
+          <button onClick={() => setGameState('ready')} style={{ flex: 1, padding: '12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--card-bg)', cursor: 'pointer', fontSize: 14, color: 'var(--ink)' }}>{t.lesson.match.menu}</button>
+          <button onClick={nextRound} style={{ flex: 1, padding: '12px', background: 'var(--gold)', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>{t.lesson.match.nextRound}</button>
         </div>
       </div>
     );
@@ -213,20 +214,20 @@ export default function MatchGame({ vocab, lessonId }: MatchGameProps) {
   if (gameState === 'done') return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, padding: '40px 24px', width: 'min(440px,100%)' }}>
       <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 48, fontWeight: 700, color: 'var(--gold)', textAlign: 'center', lineHeight: 1.1 }}>
-        {isNewRecord ? '🏆' : '完成！'}
+        {isNewRecord ? '🏆' : t.lesson.match.doneTitle}
       </div>
       {isNewRecord && (
-        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--gold)' }}>Kỷ lục mới!</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--gold)' }}>{t.lesson.match.newRecord}</div>
       )}
       {totalRounds > 1 && (
         <div style={{ fontSize: 13, color: 'var(--ash)', textAlign: 'center' }}>
-          Đã học toàn bộ {vocab.length} từ trong {totalRounds} vòng!
+          {t.lesson.match.allLearned(vocab.length, totalRounds)}
         </div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%' }}>
         {[
-          [totalRounds > 1 ? 'Tổng thời gian' : 'Thời gian', fmt(totalElapsedRef.current), 'var(--gold)'],
-          ['Kỷ lục', highscore !== null ? fmt(highscore) : '--', 'var(--ash)'],
+          [totalRounds > 1 ? t.lesson.match.totalTime : t.lesson.match.time, fmt(totalElapsedRef.current), 'var(--gold)'],
+          [t.lesson.match.record, highscore !== null ? fmt(highscore) : '--', 'var(--ash)'],
         ].map(([label, value, color]) => (
           <div key={label} style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 12px', textAlign: 'center' }}>
             <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 24, fontWeight: 700, color }}>{value}</div>
@@ -235,8 +236,8 @@ export default function MatchGame({ vocab, lessonId }: MatchGameProps) {
         ))}
       </div>
       <div style={{ display: 'flex', gap: 10, width: '100%' }}>
-        <button onClick={() => setGameState('ready')} style={{ flex: 1, padding: '12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--card-bg)', cursor: 'pointer', fontSize: 14, color: 'var(--ink)' }}>← Menu</button>
-        <button onClick={startGame} style={{ flex: 1, padding: '12px', background: 'var(--gold)', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Chơi lại</button>
+        <button onClick={() => setGameState('ready')} style={{ flex: 1, padding: '12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--card-bg)', cursor: 'pointer', fontSize: 14, color: 'var(--ink)' }}>{t.lesson.match.menu}</button>
+        <button onClick={startGame} style={{ flex: 1, padding: '12px', background: 'var(--gold)', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>{t.lesson.match.playAgain}</button>
       </div>
     </div>
   );
@@ -251,7 +252,7 @@ export default function MatchGame({ vocab, lessonId }: MatchGameProps) {
           ⏱ {fmt(elapsed)}
         </div>
         <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--ash)' }}>
-          {totalRounds > 1 ? `Vòng ${round + 1}/${totalRounds} · ` : ''}{matched.size}/{totalPairs} cặp
+          {totalRounds > 1 ? t.lesson.match.roundPrefix(round + 1, totalRounds) : ''}{t.lesson.match.pairsProgress(matched.size, totalPairs)}
         </div>
         {highscore !== null && (
           <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--ash-light)' }}>
@@ -322,7 +323,7 @@ export default function MatchGame({ vocab, lessonId }: MatchGameProps) {
       </div>
 
       <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--ash-light)', textAlign: 'center' }}>
-        Chọn một thẻ từ và một thẻ nghĩa · {totalPairs - matched.size} cặp còn lại
+        {t.lesson.match.footer(totalPairs - matched.size)}
       </div>
     </div>
   );

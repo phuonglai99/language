@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { matchDictationWords, type WordSlot } from '@/lib/dictation';
+import { t } from '@/i18n';
 
 type DictationSentence = {
   index: number; hanzi: string; pinyin: string; wordCount: number; words: string[];
@@ -38,7 +39,7 @@ function AlignmentStatusBadge({ status }: { status: AlignmentStatus }) {
       fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em',
       flexShrink: 0,
     }}>
-      {status}
+      {t.common.alignmentStatus[status]}
     </span>
   );
 }
@@ -349,14 +350,14 @@ export default function DictationExercisePage() {
 
   if (loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--paper)', color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>
-      Đang tải…
+      {t.common.loading}
     </div>
   );
 
   if (notFound || !lesson) return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, background: 'var(--paper)' }}>
-      <div style={{ fontSize: 16, color: 'var(--ink)', fontWeight: 600 }}>Không tìm thấy bài nghe</div>
-      <Link href="/dictation" style={{ color: 'var(--red)', textDecoration: 'none', fontSize: 13 }}>← Quay lại danh sách</Link>
+      <div style={{ fontSize: 16, color: 'var(--ink)', fontWeight: 600 }}>{t.dictation.practice.notFound}</div>
+      <Link href="/dictation" style={{ color: 'var(--red)', textDecoration: 'none', fontSize: 13 }}>{t.common.backToList}</Link>
     </div>
   );
 
@@ -384,7 +385,7 @@ export default function DictationExercisePage() {
           <Link href="/dictation" style={{ color: 'rgba(200,191,176,0.6)', textDecoration: 'none', fontSize: 13, flexShrink: 0, transition: 'color 0.15s' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#f5f1e8')}
             onMouseLeave={e => (e.currentTarget.style.color = 'rgba(200,191,176,0.6)')}>
-            ← Luyện nghe
+            {t.dictation.backToDictation}
           </Link>
           <span style={{ color: 'rgba(255,255,255,0.15)' }}>|</span>
           <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, background: levelColor, color: 'white', fontSize: 9.5, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em', flexShrink: 0 }}>
@@ -395,7 +396,7 @@ export default function DictationExercisePage() {
             {lesson.title_zh_simplified}
           </span>
           <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(200,191,176,0.5)', flexShrink: 0 }}>
-            {lesson.vocabCount ?? sentences.reduce((n, s) => n + s.wordCount, 0)} từ · {totalAnswered}/{sentences.length} câu
+            {t.dictation.practice.headerStats(lesson.vocabCount ?? sentences.reduce((n, s) => n + s.wordCount, 0), totalAnswered, sentences.length)}
           </span>
           {sentences.some(s => s.start == null || s.end == null) && (
             <Link href={`/dictation/align/${slug}`} style={{
@@ -403,7 +404,7 @@ export default function DictationExercisePage() {
               background: 'rgba(200,57,43,0.2)', color: '#fecaca',
               fontSize: 11, fontFamily: 'JetBrains Mono, monospace', flexShrink: 0,
             }}>
-              Cắt thủ công
+              {t.dictation.manualAlign}
             </Link>
           )}
         </div>
@@ -417,15 +418,15 @@ export default function DictationExercisePage() {
           {/* Per-sentence playback */}
           <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <span style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', textTransform: 'uppercase' }}>Nghe câu</span>
+              <span style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', textTransform: 'uppercase' }}>{t.dictation.practice.listenSentence}</span>
               {hasAlignedAudio(currentSentence) ? (
-                <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: '#16a34a' }}>Audio ✓</span>
+                <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: '#16a34a' }}>{t.dictation.practice.audioReady}</span>
               ) : ttsSupported ? (
-                <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: '#16a34a' }}>TTS ✓</span>
+                <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: '#16a34a' }}>{t.dictation.practice.ttsReady}</span>
               ) : null}
             </div>
             <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--ash)', marginBottom: 10 }}>
-              Câu #{(currentSentence?.index ?? 0) + 1} — {currentSentence?.wordCount ?? 0} từ
+              {t.dictation.practice.sentenceInfo((currentSentence?.index ?? 0) + 1, currentSentence?.wordCount ?? 0)}
             </div>
             {/* Speed */}
             <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
@@ -444,7 +445,7 @@ export default function DictationExercisePage() {
             </div>
             {!hasAlignedAudio(currentSentence) && !ttsSupported && (
               <div style={{ fontSize: 11, color: '#dc2626', fontFamily: 'JetBrains Mono, monospace', marginBottom: 8 }}>
-                Trình duyệt không hỗ trợ TTS
+                {t.dictation.practice.ttsUnsupported}
               </div>
             )}
           </div>
@@ -453,7 +454,7 @@ export default function DictationExercisePage() {
           {lesson.audio_url && (
             <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
               <div style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', marginBottom: 10, textTransform: 'uppercase' }}>
-                Audio gốc (cả bài)
+                {t.dictation.practice.fullAudio}
               </div>
               <audio
                 ref={audioRef}
@@ -470,7 +471,7 @@ export default function DictationExercisePage() {
 
           {/* ĐIỀU KHIỂN */}
           <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
-            <div style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', marginBottom: 12, textTransform: 'uppercase' }}>Điều khiển</div>
+            <div style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', marginBottom: 12, textTransform: 'uppercase' }}>{t.dictation.practice.controls}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <button
                 onClick={togglePlay}
@@ -484,7 +485,7 @@ export default function DictationExercisePage() {
                   transition: 'background 0.15s',
                 }}
               >
-                {isPlaying ? '⏸ Dừng' : '▶ Nghe câu này'}
+                {isPlaying ? t.dictation.practice.stop : t.dictation.practice.playSentence}
               </button>
               <button
                 onClick={replayAudio}
@@ -499,22 +500,16 @@ export default function DictationExercisePage() {
                   transition: 'all 0.15s',
                 }}
               >
-                ↺ Nghe lại (Tab)
+                {t.dictation.practice.replay}
               </button>
             </div>
           </div>
 
           {/* Keyboard shortcuts hint */}
           <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 14 }}>
-            <div style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', marginBottom: 10, textTransform: 'uppercase' }}>Phím tắt</div>
+            <div style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', marginBottom: 10, textTransform: 'uppercase' }}>{t.dictation.practice.shortcuts}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {[
-                ['Space', 'Play / Pause'],
-                ['Tab', 'Phát lại'],
-                ['Enter', 'Chấm điểm'],
-                ['Ctrl+H', 'Gợi ý pinyin'],
-                ['← →', 'Chuyển câu'],
-              ].map(([key, desc]) => (
+              {t.dictation.practice.shortcutList.map(({ key, desc }) => (
                 <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, padding: '1px 6px', background: 'var(--paper-alt)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--ink)', whiteSpace: 'nowrap' }}>
                     {key}
@@ -540,7 +535,7 @@ export default function DictationExercisePage() {
                 transition: 'all 0.15s',
                 textTransform: 'capitalize',
               }}>
-                {d === 'easy' ? 'Dễ' : d === 'normal' ? 'Bình thường' : 'Khó'}
+                {t.dictation.practice.difficulty[d]}
               </button>
             ))}
             <div style={{ flex: 1 }} />
@@ -562,7 +557,7 @@ export default function DictationExercisePage() {
           <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 20, flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                Gõ những gì bạn nghe được: <span style={{ color: 'var(--ash-light)', fontWeight: 400 }}>Câu #{(currentSentence?.index ?? 0) + 1} ({targetWordCount} từ)</span>
+                {t.dictation.practice.inputLabel}<span style={{ color: 'var(--ash-light)', fontWeight: 400 }}>{t.dictation.practice.inputSentence((currentSentence?.index ?? 0) + 1, targetWordCount)}</span>
               </div>
               <div style={{
                 flexShrink: 0,
@@ -576,7 +571,7 @@ export default function DictationExercisePage() {
                 fontWeight: 700,
                 whiteSpace: 'nowrap',
               }}>
-                {filledWordCount}/{targetWordCount} từ
+                {t.dictation.practice.wordProgress(filledWordCount, targetWordCount)}
               </div>
             </div>
 
@@ -613,7 +608,7 @@ export default function DictationExercisePage() {
                   checkAnswer();
                 }
               }}
-              placeholder="Gõ liên tục, không cần dấu cách… (Enter để chấm điểm)"
+              placeholder={t.dictation.practice.inputPlaceholder}
               style={{
                 width: '100%', boxSizing: 'border-box',
                 minHeight: 100, resize: 'none',
@@ -629,12 +624,12 @@ export default function DictationExercisePage() {
             />
             <div style={{ marginTop: -8, fontFamily: 'Be Vietnam Pro, sans-serif', fontSize: 12, color: wordCountColor }}>
               {extraWordCount > 0
-                ? 'Dư chữ so với câu gốc'
+                ? t.dictation.practice.tooManyChars
                 : remainingWordCount > 0
-                  ? `Còn thiếu ${remainingWordCount} từ`
+                  ? t.dictation.practice.wordsMissing(remainingWordCount)
                   : allWordsCorrect
-                    ? 'Tất cả các từ đều đúng'
-                    : 'Đã đủ số từ — kiểm tra các từ đỏ'}
+                    ? t.dictation.practice.allCorrect
+                    : t.dictation.practice.checkRedWords}
             </div>
 
             {/* Action buttons */}
@@ -649,7 +644,7 @@ export default function DictationExercisePage() {
                   fontFamily: 'Be Vietnam Pro, sans-serif', transition: 'background 0.15s',
                 }}
               >
-                {isChecking ? 'Đang chấm…' : '✓ Chấm điểm'}
+                {isChecking ? t.dictation.practice.checking : t.dictation.practice.check}
               </button>
               {difficulty !== 'easy' && (
                 <button
@@ -666,7 +661,7 @@ export default function DictationExercisePage() {
                     transition: 'all 0.15s',
                   }}
                 >
-                  {showHint ? 'Ẩn gợi ý' : 'Hiện gợi ý'}
+                  {showHint ? t.dictation.practice.hideHint : t.dictation.practice.showHint}
                 </button>
               )}
               {currentResult && (
@@ -690,18 +685,18 @@ export default function DictationExercisePage() {
             {currentResult && (
               <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Kết quả</span>
+                  <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.dictation.practice.result}</span>
                   {currentResult.is_perfect ? (
-                    <span style={{ fontSize: 12, color: '#16a34a', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace' }}>✓ Hoàn hảo!</span>
+                    <span style={{ fontSize: 12, color: '#16a34a', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace' }}>{t.dictation.practice.perfect}</span>
                   ) : (
                     <span style={{ fontSize: 12, color: '#dc2626', fontFamily: 'JetBrains Mono, monospace' }}>
-                      {currentResult.result.filter(r => r.status === 'correct').length}/{currentResult.result.filter(r => r.status !== 'extra').length} từ đúng
+                      {t.dictation.practice.correctWords(currentResult.result.filter(r => r.status === 'correct').length, currentResult.result.filter(r => r.status !== 'extra').length)}
                     </span>
                   )}
                 </div>
                 {!currentResult.is_perfect && (
                   <div style={{ marginTop: 12, padding: '8px 12px', background: 'rgba(22,163,74,0.06)', borderRadius: 6, border: '1px solid rgba(22,163,74,0.15)' }}>
-                    <div style={{ fontSize: 10, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', marginBottom: 4, textTransform: 'uppercase' }}>Đáp án đúng</div>
+                    <div style={{ fontSize: 10, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', marginBottom: 4, textTransform: 'uppercase' }}>{t.dictation.practice.correctAnswer}</div>
                     <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 18, color: '#16a34a', lineHeight: 1.6 }}>{currentResult.correct_hanzi}</div>
                     <div style={{ fontFamily: 'Be Vietnam Pro, sans-serif', fontSize: 12, color: 'var(--ash)', marginTop: 2 }}>{currentResult.pinyin}</div>
                   </div>
@@ -714,7 +709,7 @@ export default function DictationExercisePage() {
         {/* ── RIGHT: BÀN CHÉP ─────────────────────────────────── */}
         <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ash)' }}>Bàn chép</span>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ash)' }}>{t.dictation.practice.board}</span>
             <ScoreBar pct={scorePercent} />
           </div>
 
@@ -749,7 +744,7 @@ export default function DictationExercisePage() {
                       #{s.index + 1}
                     </span>
                     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                      {isHinted && <span style={{ fontSize: 9, color: '#dc2626', fontFamily: 'JetBrains Mono, monospace' }}>hint</span>}
+                      {isHinted && <span style={{ fontSize: 9, color: '#dc2626', fontFamily: 'JetBrains Mono, monospace' }}>{t.dictation.practice.hintUsed}</span>}
                       {isPerfect && <span style={{ fontSize: 12 }}>✓</span>}
                     </div>
                   </div>
@@ -782,7 +777,7 @@ export default function DictationExercisePage() {
           {/* Summary */}
           {totalAnswered > 0 && (
             <div style={{ flexShrink: 0, padding: '10px 12px', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 8 }}>
-              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--ash)', marginBottom: 4 }}>Tổng kết</div>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--ash)', marginBottom: 4 }}>{t.dictation.practice.summary}</div>
               <div style={{ display: 'flex', gap: 12 }}>
                 <span style={{ fontSize: 12, color: '#16a34a', fontFamily: 'JetBrains Mono, monospace' }}>✓ {totalCorrect}</span>
                 <span style={{ fontSize: 12, color: '#dc2626', fontFamily: 'JetBrains Mono, monospace' }}>✗ {totalAnswered - totalCorrect}</span>

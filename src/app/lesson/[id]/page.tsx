@@ -10,6 +10,7 @@ import { VocabListCard } from '@/app/components/VocabListCard';
 import { Pagination } from '@/app/components/Pagination';
 import { frequencyLabel } from '@/shared/hanzi';
 import { speakChinese } from '@/lib/speech';
+import { t } from '@/i18n';
 
 // ─── Botu renderer ────────────────────────────────────────────────────────────
 
@@ -26,7 +27,7 @@ function renderBotu(botu: BotuBlock[]) {
             color: p.t === 'y' ? 'var(--gold)' : p.t === 'am' ? 'var(--blue)' : 'var(--ash)',
           }}>
             <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 14, fontWeight: 600 }}>{p.ph}</span>
-            <span style={{ fontSize: 8.5, opacity: 0.7 }}>{p.t === 'y' ? 'ý·' : p.t === 'am' ? 'âm·' : 'độc·'}</span>
+            <span style={{ fontSize: 8.5, opacity: 0.7 }}>{p.t === 'y' ? t.lesson.botu.short.y : p.t === 'am' ? t.lesson.botu.short.am : t.lesson.botu.short.doc}</span>
             <span style={{ fontSize: 10 }}>{p.n}</span>
           </div>
         ))}
@@ -43,7 +44,7 @@ function ClickableHanzi({ text, fontSize, onChar }: { text: string; fontSize: st
     <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize, fontWeight: 700, color: 'var(--ink)', lineHeight: 1 }}>
       {[...text].map((c, i) =>
         isCJK(c) ? (
-          <span key={i} onClick={e => { e.stopPropagation(); onChar(c); }} title="Tra kanji"
+          <span key={i} onClick={e => { e.stopPropagation(); onChar(c); }} title={t.lesson.flashcard.lookupKanji}
             style={{ cursor: 'pointer', transition: 'opacity 0.1s, color 0.1s' }}
             onMouseEnter={e => { e.currentTarget.style.opacity = '0.65'; e.currentTarget.style.color = 'var(--red)'; }}
             onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--ink)'; }}>{c}</span>
@@ -105,7 +106,7 @@ function CharStroke({ char, size = 72, charData }: { char: string; size?: number
       <div ref={ref} style={{ width: size, height: size }} />
       <button
         onClick={e => { e.stopPropagation(); writerRef.current?.animateCharacter(); }}
-        title="Phát lại nét viết"
+        title={t.lesson.flashcard.replayStrokes}
         style={{
           position: 'absolute', bottom: 0, right: 0,
           width: 18, height: 18, borderRadius: '50%',
@@ -189,10 +190,7 @@ function KanjiPanel({ char, onClose }: { char: string; onClose: () => void }) {
     return label ? { label } : null;
   };
 
-  const POS_NAMES: Record<string, string> = {
-    'Đại': 'Đại từ', 'Đt': 'Động từ', 'Dt': 'Danh từ', 'Tt': 'Tính từ',
-    'Tr': 'Trạng từ', 'P': 'Phó từ', 'C': 'Giới từ', 'K': 'Kết từ', 'T': 'Thán từ',
-  };
+  const POS_NAMES: Record<string, string> = t.lesson.kanjiPanel.posNames;
 
   const tdtdRest = (tdtd: string[]): string => {
     if (!tdtd.length) return '';
@@ -202,14 +200,14 @@ function KanjiPanel({ char, onClose }: { char: string; onClose: () => void }) {
   return (
     <div style={{ position: 'fixed', top: 66, right: 0, bottom: 0, width: 320, background: 'var(--paper-alt)', borderLeft: '1px solid var(--border)', zIndex: 99, overflowY: 'auto', boxShadow: '-8px 0 32px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, background: 'var(--paper-alt)', zIndex: 1 }}>
-        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ash-light)' }}>Hán tự</div>
+        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ash-light)' }}>{t.lesson.kanjiPanel.title}</div>
         <button onClick={onClose} style={{ width: 28, height: 28, border: '1px solid var(--border)', borderRadius: '50%', background: 'transparent', cursor: 'pointer', fontSize: 15, color: 'var(--ash)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
       </div>
-      {loading && <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ash-light)', fontSize: 13 }}>Đang tải...</div>}
+      {loading && <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ash-light)', fontSize: 13 }}>{t.common.loading}</div>}
       {!loading && !data && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 64, color: 'var(--ink)' }}>{char}</div>
-          <div style={{ fontSize: 12, color: 'var(--ash-light)' }}>Chưa có dữ liệu cho chữ này</div>
+          <div style={{ fontSize: 12, color: 'var(--ash-light)' }}>{t.lesson.kanjiPanel.noData}</div>
         </div>
       )}
       {!loading && data && (
@@ -229,7 +227,7 @@ function KanjiPanel({ char, onClose }: { char: string; onClose: () => void }) {
             )}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {[['Bộ thủ', data.radical], ['Số nét', data.strokes ? `${data.strokes} nét` : null], ['Lục thư', data.lucthu], ['Hình thái', data.hinhthai], ['Nét bút', data.netbut], ['Phổ biến', (() => { const p = popularLabel(data.popular); return p ? p.label : null; })()]].filter(([, v]) => v).map(([k, v]) => (
+            {[[t.lesson.kanjiPanel.fields.radical, data.radical], [t.lesson.kanjiPanel.fields.strokes, data.strokes ? t.lesson.kanjiPanel.strokeCount(data.strokes) : null], [t.lesson.kanjiPanel.fields.lucthu, data.lucthu], [t.lesson.kanjiPanel.fields.hinhthai, data.hinhthai], [t.lesson.kanjiPanel.fields.netbut, data.netbut], [t.lesson.kanjiPanel.fields.popular, (() => { const p = popularLabel(data.popular); return p ? p.label : null; })()]].filter(([, v]) => v).map(([k, v]) => (
               <div key={k as string} style={{ background: 'var(--card-bg)', borderRadius: 5, padding: '8px 10px', border: '1px solid var(--border)' }}>
                 <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ash-light)', marginBottom: 2 }}>{k}</div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>{v}</div>
@@ -239,16 +237,16 @@ function KanjiPanel({ char, onClose }: { char: string; onClose: () => void }) {
           {data.botu && data.botu.length > 0 && (
             <div>
               <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--ash-light)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                Phân tích bộ thủ
+                {t.lesson.kanjiPanel.botuHeading}
                 {data.botuSource === 'claude' && (
-                  <span style={{ fontSize: 8, letterSpacing: '0.08em', color: 'var(--gold)', border: '1px solid var(--gold)', borderRadius: 3, padding: '1px 5px' }}>Claude</span>
+                  <span style={{ fontSize: 8, letterSpacing: '0.08em', color: 'var(--gold)', border: '1px solid var(--gold)', borderRadius: 3, padding: '1px 5px' }}>{t.lesson.kanjiPanel.aiSourceBadge}</span>
                 )}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {data.botu.map((part, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                     <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 16, fontWeight: 700, color: part.t === 'y' ? 'var(--red)' : part.t === 'am' ? 'var(--gold)' : 'var(--ink)', minWidth: 24 }}>{part.ph}</span>
-                    <span style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ash-light)', minWidth: 28 }}>{part.t === 'y' ? 'ý' : part.t === 'am' ? 'âm' : 'độc'}</span>
+                    <span style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ash-light)', minWidth: 28 }}>{part.t === 'y' ? t.lesson.botu.long.y : part.t === 'am' ? t.lesson.botu.long.am : t.lesson.botu.long.doc}</span>
                     <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{part.n}</span>
                   </div>
                 ))}
@@ -257,7 +255,7 @@ function KanjiPanel({ char, onClose }: { char: string; onClose: () => void }) {
           )}
           {data.meansTdpt.length > 0 && (
             <div>
-              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--ash-light)', marginBottom: 8 }}>Nghĩa</div>
+              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--ash-light)', marginBottom: 8 }}>{t.lesson.kanjiPanel.meaningHeading}</div>
               <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {data.meansTdpt.map((m, i) => <li key={i} style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{m}</li>)}
               </ol>
@@ -270,7 +268,7 @@ function KanjiPanel({ char, onClose }: { char: string; onClose: () => void }) {
           )}
           {data.meansTg.length > 0 && (
             <div>
-              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--ash-light)', marginBottom: 8 }}>Từ ghép</div>
+              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--ash-light)', marginBottom: 8 }}>{t.lesson.kanjiPanel.compoundsHeading}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {data.meansTg.slice(0, 8).map((tg, i) => (
                   <div key={i} style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 4, padding: '4px 9px', fontSize: 12, color: 'var(--ink-soft)' }}>{tg}</div>
@@ -289,10 +287,10 @@ function KanjiPanel({ char, onClose }: { char: string; onClose: () => void }) {
 type Mode = 'flash' | 'quiz' | 'match' | 'list';
 
 const MODES: { key: Mode; icon: string; label: string }[] = [
-  { key: 'list',  icon: '≡',  label: 'Danh sách' },
-  { key: 'flash', icon: '卡', label: 'Flashcard' },
-  { key: 'quiz',  icon: '测', label: 'Kiểm tra' },
-  { key: 'match', icon: '配', label: 'Ghép thẻ' },
+  { key: 'list',  icon: '≡',  label: t.lesson.modes.list },
+  { key: 'flash', icon: '卡', label: t.common.features.flashcard },
+  { key: 'quiz',  icon: '测', label: t.common.features.quiz },
+  { key: 'match', icon: '配', label: t.common.features.match },
 ];
 
 function ModeTab({ m, active, onClick }: { m: typeof MODES[0]; active: boolean; onClick: () => void }) {
@@ -397,7 +395,7 @@ export default function LessonPage() {
 
   if (!lesson) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--ash)', gap: 10, fontSize: 14 }}>
-      <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 20 }}>汉</span> Đang tải...
+      <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 20 }}>汉</span> {t.common.loading}
     </div>
   );
 
@@ -412,9 +410,9 @@ export default function LessonPage() {
         <div style={{ padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', gap: 14 }}>
 
           {/* Brand back link */}
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none', flexShrink: 0, opacity: 0.85 }} title="Trang chủ">
+          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none', flexShrink: 0, opacity: 0.85 }} title={t.common.features.home}>
             <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 20, fontWeight: 700, color: '#f5f1e8', lineHeight: 1 }}>汉</span>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.12em', color: 'rgba(200,191,176,0.4)', textTransform: 'uppercase' }}>← Về</span>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.12em', color: 'rgba(200,191,176,0.4)', textTransform: 'uppercase' }}>{t.common.back}</span>
           </Link>
 
           <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.12)', flexShrink: 0 }} />
@@ -423,7 +421,7 @@ export default function LessonPage() {
           <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
             <div style={{ fontSize: 13.5, fontWeight: 600, color: '#f5f1e8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{lesson.title}</div>
             <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9.5, color: 'rgba(200,191,176,0.55)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {lesson.vocab.length} từ · {lesson.grammar.length} ngữ pháp · {lesson.level}
+              {t.lesson.page.meta(lesson.vocab.length, lesson.grammar.length, lesson.level)}
             </div>
           </div>
 
@@ -438,14 +436,14 @@ export default function LessonPage() {
           <Link href={`/grammar/${id}`} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 7, border: '1px solid transparent', color: 'var(--gold)', fontSize: 12.5, fontWeight: 500, textDecoration: 'none', flexShrink: 0, transition: 'border-color 0.15s' }}
             onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(160,114,10,0.4)')}
             onMouseLeave={e => (e.currentTarget.style.borderColor = 'transparent')}>
-            <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 14 }}>文</span> Ngữ pháp
+            <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 14 }}>文</span> {t.common.features.grammar}
           </Link>
 
           {/* Notes link */}
           <Link href="/notes" style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 7, border: '1px solid transparent', color: 'rgba(200,191,176,0.6)', fontSize: 12.5, fontWeight: 500, textDecoration: 'none', flexShrink: 0, transition: 'border-color 0.15s, color 0.15s' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.color = '#f5f1e8'; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.color = 'rgba(200,191,176,0.6)'; }}>
-            📝 Ghi chú
+            {t.common.notes}
           </Link>
 
           {/* Shuffle (flash only) */}
@@ -454,7 +452,7 @@ export default function LessonPage() {
               const s = !shuffled; setShuffled(s);
               setQueue(s ? shuffleArr(lesson.vocab) : [...lesson.vocab]);
               setIdx(0); setFlipped(false);
-            }} title={shuffled ? 'Bỏ xáo trộn' : 'Xáo trộn thẻ'} style={{
+            }} title={shuffled ? t.lesson.page.shuffleOff : t.lesson.page.shuffleOn} style={{
               width: 32, height: 32, borderRadius: 7,
               background: shuffled ? 'rgba(255,255,255,0.12)' : 'transparent',
               border: `1px solid ${shuffled ? 'rgba(255,255,255,0.2)' : 'transparent'}`,
@@ -483,13 +481,13 @@ export default function LessonPage() {
                 {/* FRONT */}
                 <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', borderRadius: 14, border: '1px solid var(--border)', background: 'var(--card-bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
                   <button onClick={e => { e.stopPropagation(); speak(card.zh); }} style={{ position: 'absolute', top: 14, left: 16, width: 34, height: 34, border: '1px solid var(--border)', borderRadius: '50%', background: 'var(--paper-alt)', cursor: 'pointer', fontSize: 15 }}>🔊</button>
-                  <button onClick={e => { e.stopPropagation(); setNoteWord(card); }} title="Thêm vào ghi chú" style={{ position: 'absolute', top: 14, left: 58, width: 34, height: 34, border: '1px solid var(--border)', borderRadius: '50%', background: 'var(--paper-alt)', cursor: 'pointer', fontSize: 14 }}>📝</button>
+                  <button onClick={e => { e.stopPropagation(); setNoteWord(card); }} title={t.lesson.flashcard.addToNotes} style={{ position: 'absolute', top: 14, left: 58, width: 34, height: 34, border: '1px solid var(--border)', borderRadius: '50%', background: 'var(--paper-alt)', cursor: 'pointer', fontSize: 14 }}>📝</button>
                   <div style={{ position: 'absolute', top: 16, right: 18, fontFamily: 'JetBrains Mono, monospace', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ash-light)' }}>{lesson.level}</div>
                   <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ash-light)' }}>{card.pos}</div>
                   <ClickableHanzi text={card.zh} fontSize="clamp(52px, 11vw, 88px)" onChar={setKanjiChar} />
                   <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 'clamp(13px, 2.5vw, 18px)', color: 'var(--red)', fontWeight: 500, letterSpacing: '0.05em' }}>{card.py}</div>
                   <WordStroke text={card.zh} cardId={`${idx}-${card.id}`} />
-                  <div style={{ position: 'absolute', bottom: 18, fontSize: 11, color: 'var(--ash-light)', fontFamily: 'JetBrains Mono, monospace' }}>click hoặc Space để lật · click chữ để tra</div>
+                  <div style={{ position: 'absolute', bottom: 18, fontSize: 11, color: 'var(--ash-light)', fontFamily: 'JetBrains Mono, monospace' }}>{t.lesson.flashcard.frontHint}</div>
                 </div>
                 {/* BACK */}
                 <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', borderRadius: 14, border: '1px solid var(--border)', background: 'var(--paper-alt)', padding: '24px 28px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', gap: 2 }}>
@@ -511,7 +509,7 @@ export default function LessonPage() {
               <button onClick={() => { setIdx(i => Math.max(i - 1, 0)); setFlipped(false); setKanjiChar(null); }}
                 style={{ width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--border)', background: 'var(--card-bg)', cursor: 'pointer', fontSize: 20, color: 'var(--ink-soft)' }}>‹</button>
               <button onClick={() => setFlipped(f => !f)}
-                style={{ flex: 1, height: 44, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--card-bg)', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>Lật thẻ</button>
+                style={{ flex: 1, height: 44, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--card-bg)', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{t.lesson.flashcard.flip}</button>
               <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: 'var(--ash)', minWidth: 60, textAlign: 'center' }}>
                 <strong>{idx + 1}</strong> / {queue.length}
               </div>
@@ -521,7 +519,7 @@ export default function LessonPage() {
 
             {/* Keyboard hints */}
             <div style={{ display: 'flex', gap: 16, fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--ash-light)' }}>
-              {[['Space', 'lật'], ['← →', 'điều hướng'], ['P', 'phát âm'], ['Esc', 'đóng tra chữ']].map(([k, v]) => (
+              {t.lesson.flashcard.keyHints.map(([k, v]) => (
                 <span key={k}><kbd style={{ background: 'var(--paper-alt)', border: '1px solid var(--border)', borderRadius: 3, padding: '1px 5px', fontSize: 10 }}>{k}</kbd> {v}</span>
               ))}
             </div>
@@ -548,7 +546,7 @@ export default function LessonPage() {
                       onSpeak={speak}
                       extra={
                         <button onClick={e => { e.stopPropagation(); setNoteWord(v); }}
-                          title="Lưu vào ghi chú"
+                          title={t.common.saveToNotes}
                           style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, color: 'var(--ash-light)', padding: '2px 4px', flexShrink: 0, transition: 'color 0.1s' }}
                           onMouseEnter={e => (e.currentTarget.style.color = 'var(--ink)')}
                           onMouseLeave={e => (e.currentTarget.style.color = 'var(--ash-light)')}>📝</button>

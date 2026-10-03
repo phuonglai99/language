@@ -1,13 +1,14 @@
 import Link from 'next/link';
+import { t } from '@/i18n';
 import { getAdjacentPassages, getPassage } from '@/server';
 import LessonReader from './LessonReader';
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const lesson = await getPassage(slug);
-  if (!lesson) return { title: 'Không tìm thấy bài đọc' };
+  if (!lesson) return { title: t.reading.lesson.notFound };
   return {
-    title: `${lesson.title_zh_simplified} — ${lesson.title_en} | HSK ${lesson.hsk_level}`,
+    title: t.reading.lesson.metaTitle(lesson.title_zh_simplified, lesson.title_en, lesson.hsk_level),
     description: lesson.content_text.slice(0, 150),
   };
 }
@@ -20,8 +21,8 @@ export default async function ReadingLessonPage({ params }: { params: Promise<{ 
 
   if (!lesson) return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, background: 'transparent' }}>
-      <div style={{ fontSize: 16, color: 'var(--ink)', fontWeight: 600 }}>Không tìm thấy bài đọc</div>
-      <Link href="/reading" style={{ color: 'var(--red)', textDecoration: 'none', fontSize: 13 }}>← Quay lại danh sách</Link>
+      <div style={{ fontSize: 16, color: 'var(--ink)', fontWeight: 600 }}>{t.reading.lesson.notFound}</div>
+      <Link href="/reading" style={{ color: 'var(--red)', textDecoration: 'none', fontSize: 13 }}>{t.common.backToList}</Link>
     </div>
   );
 

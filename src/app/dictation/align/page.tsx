@@ -2,6 +2,7 @@
 import { useState, useEffect, useTransition, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { t } from '@/i18n';
 
 type AlignLesson = {
   slug: string;
@@ -39,7 +40,7 @@ function AlignmentStatusBadge({ status }: { status: AlignmentStatus }) {
       fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em',
       whiteSpace: 'nowrap',
     }}>
-      {status}
+      {t.common.alignmentStatus[status]}
     </span>
   );
 }
@@ -90,11 +91,11 @@ function AlignListInner() {
             <Link href="/dictation" style={{ color: 'rgba(200,191,176,0.6)', textDecoration: 'none', fontSize: 13 }}
               onMouseEnter={e => (e.currentTarget.style.color = '#f5f1e8')}
               onMouseLeave={e => (e.currentTarget.style.color = 'rgba(200,191,176,0.6)')}>
-              ← Luyện nghe
+              {t.dictation.backToDictation}
             </Link>
             <span style={{ color: 'rgba(255,255,255,0.15)' }}>|</span>
             <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 20, fontWeight: 700, color: '#f5f1e8' }}>✂️</span>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.18em', color: 'var(--red)', textTransform: 'uppercase' }}>Cắt audio thủ công</span>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.18em', color: 'var(--red)', textTransform: 'uppercase' }}>{t.common.features.align}</span>
           </div>
           <div style={{ position: 'relative', flex: 1, maxWidth: 280 }}>
             <input
@@ -103,7 +104,7 @@ function AlignListInner() {
                 setSearchVal(e.target.value);
                 replaceParams({ q: e.target.value });
               }}
-              placeholder="Tìm bài…"
+              placeholder={t.dictation.align.list.searchPlaceholder}
               style={{
                 width: '100%', boxSizing: 'border-box', padding: '7px 10px',
                 background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
@@ -113,7 +114,7 @@ function AlignListInner() {
             />
           </div>
           <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(200,191,176,0.5)', whiteSpace: 'nowrap' }}>
-            <strong style={{ color: '#f5f1e8' }}>{lessons.length}</strong> bài
+            <strong style={{ color: '#f5f1e8' }}>{lessons.length}</strong>{t.common.lessonCountSuffix}
           </span>
         </div>
       </header>
@@ -129,7 +130,7 @@ function AlignListInner() {
               fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace',
             }}
           >
-            Tất cả
+            {t.common.all}
           </button>
           {HSK_LEVELS.map(lvl => (
             <button
@@ -163,7 +164,7 @@ function AlignListInner() {
                   fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace',
                 }}
               >
-                {nextStatus}
+                {t.common.alignmentStatus[nextStatus]}
               </button>
             );
           })}
@@ -177,14 +178,14 @@ function AlignListInner() {
               fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace',
             }}
           >
-            {unmatched && !status ? 'Đang lọc: thiếu mốc' : 'Chỉ bài thiếu mốc'}
+            {unmatched && !status ? t.dictation.align.list.filteringUnmatched : t.dictation.align.list.onlyUnmatched}
           </button>
         </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>Đang tải…</div>
+          <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>{t.common.loading}</div>
         ) : lessons.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)' }}>Không có bài nào.</div>
+          <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)' }}>{t.dictation.align.list.empty}</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
             {lessons.map(l => {
@@ -224,8 +225,8 @@ function AlignListInner() {
                           color: l.unmatchedCount > 0 ? '#c8392b' : '#16a34a',
                         }}>
                           {l.unmatchedCount > 0
-                            ? `${l.unmatchedCount}/${l.sentenceCount} thiếu mốc`
-                            : `${l.sentenceCount} câu ✓`}
+                            ? t.dictation.align.list.unmatchedCount(l.unmatchedCount, l.sentenceCount)
+                            : t.dictation.align.list.sentenceCountDone(l.sentenceCount)}
                         </span>
                       </div>
                     </div>
@@ -249,7 +250,7 @@ function AlignListInner() {
 
 export default function AlignListPage() {
   return (
-    <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--ash)' }}>Đang tải…</div>}>
+    <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--ash)' }}>{t.common.loading}</div>}>
       <AlignListInner />
     </Suspense>
   );

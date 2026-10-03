@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { t } from '@/i18n';
 
 const LEVEL_COLOR: Record<number, string> = {
   1: '#3a8a5c', 2: '#4a72a0', 3: '#a0720a', 4: '#c8392b', 5: '#7a3db0',
@@ -56,7 +57,7 @@ export function ReadingSearch({ hsk, q, status }: Filters) {
       <input
         value={value}
         onChange={e => setValue(e.target.value)}
-        placeholder="Tìm bài đọc…"
+        placeholder={t.reading.filters.searchPlaceholder}
         style={{
           width: '100%', boxSizing: 'border-box', padding: '7px 10px 7px 32px',
           background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
@@ -89,7 +90,7 @@ export function ReadingFilterPills({ hsk, q, status }: Filters) {
           transition: 'all 0.15s',
         }}
       >
-        Tất cả
+        {t.common.all}
       </button>
       {HSK_LEVELS.map(lvl => (
         <button
@@ -126,7 +127,7 @@ export function ReadingFilterPills({ hsk, q, status }: Filters) {
               transition: 'all 0.15s',
             }}
           >
-            {nextStatus}
+            {t.common.alignmentStatus[nextStatus]}
           </button>
         );
       })}

@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { GRAMMAR_LEVEL_LABELS, UNLEVELED_LABEL } from '@/shared/grammar';
 import { lessonGrammarHref } from '@/shared/lessons';
 import { siteConfig, siteNameLines } from '@/config/site';
+import { t } from '@/i18n';
 
 type LessonMeta = {
   id: string; title: string; subtitle?: string; level: string;
@@ -27,12 +28,12 @@ const HSK_LEVELS = ['HSK1', 'HSK2', 'HSK3', 'HSK4', 'HSK5', 'HSK6'];
 const GRAMMAR_HSK_LEVELS = GRAMMAR_LEVEL_LABELS;
 
 const SECTIONS = [
-  { key: 'vocab',    icon: '卡', label: 'Từ vựng',       color: '#c8392b' },
-  { key: 'grammar',  icon: '文', label: 'Ngữ pháp',      color: '#a0720a' },
-  { key: 'reading',  icon: '读', label: 'Đọc bài khoá',  color: '#3a8a5c' },
-  { key: 'listen',   icon: '🎧', label: 'Luyện nghe',    color: '#4a72a0' },
-  { key: 'quiz',     icon: '测', label: 'Kiểm tra',      color: '#4a72a0' },
-  { key: 'game',     icon: '配', label: 'Trò chơi',      color: '#7a3db0' },
+  { key: 'vocab',    icon: '卡', label: t.common.features.vocab, color: '#c8392b' },
+  { key: 'grammar',  icon: '文', label: t.common.features.grammar, color: '#a0720a' },
+  { key: 'reading',  icon: '读', label: t.common.features.reading, color: '#3a8a5c' },
+  { key: 'listen',   icon: '🎧', label: t.shell.sidebar.sections.listen, color: '#4a72a0' },
+  { key: 'quiz',     icon: '测', label: t.common.features.quiz, color: '#4a72a0' },
+  { key: 'game',     icon: '配', label: t.shell.sidebar.sections.game, color: '#7a3db0' },
 ];
 
 function lessonHref(section: string, id: string): string {
@@ -145,13 +146,13 @@ export default function GlobalShell() {
           paddingTop: 12, gap: 16,
         }}>
           {/* Logo */}
-          <button onClick={() => setOpen(true)} title="Mở menu" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+          <button onClick={() => setOpen(true)} title={t.shell.sidebar.openMenu} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
             <img src={siteConfig.logo} alt={siteConfig.shortName} style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover', display: 'block' }} />
           </button>
           {/* Expand icon */}
           <button
             onClick={() => setOpen(true)}
-            title="Mở menu"
+            title={t.shell.sidebar.openMenu}
             style={{
               width: 32, height: 32, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)',
               background: 'rgba(255,255,255,0.06)', color: 'rgba(200,191,176,0.6)',
@@ -170,7 +171,7 @@ export default function GlobalShell() {
             </div>
           ))}
           {/* Notes icon */}
-          <Link href="/notes" title="Ghi chú của tôi" style={{ width: 32, height: 32, borderRadius: 8, background: pathname.startsWith('/notes') ? '#e09d3a44' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, textDecoration: 'none' }}>
+          <Link href="/notes" title={t.shell.sidebar.notes} style={{ width: 32, height: 32, borderRadius: 8, background: pathname.startsWith('/notes') ? '#e09d3a44' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, textDecoration: 'none' }}>
             📝
           </Link>
         </div>
@@ -197,7 +198,7 @@ export default function GlobalShell() {
             {/* Collapse button */}
             <button
               onClick={closeAll}
-              title="Thu gọn"
+              title={t.shell.sidebar.collapse}
               style={{
                 width: 28, height: 28, borderRadius: 7, border: '1px solid rgba(255,255,255,0.1)',
                 background: 'rgba(255,255,255,0.06)', color: 'rgba(200,191,176,0.6)',
@@ -219,7 +220,7 @@ export default function GlobalShell() {
               onChange={e => setQuery(e.target.value)}
               onCompositionStart={() => { composingRef.current = true; }}
               onCompositionEnd={e => { composingRef.current = false; setQuery((e.target as HTMLInputElement).value); }}
-              placeholder="Tìm từ vựng (pinyin, hán tự…)"
+              placeholder={t.shell.sidebar.search.placeholder}
               style={{
                 width: '100%', boxSizing: 'border-box',
                 padding: '8px 10px 8px 32px',
@@ -234,10 +235,10 @@ export default function GlobalShell() {
           {(query.trim().length > 0) && (
             <div style={{ marginTop: 8, maxHeight: 260, overflowY: 'auto', background: 'rgba(0,0,0,0.2)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)' }}>
               {searching && (
-                <div style={{ padding: '12px 14px', color: 'rgba(200,191,176,0.6)', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}>Đang tìm…</div>
+                <div style={{ padding: '12px 14px', color: 'rgba(200,191,176,0.6)', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}>{t.shell.sidebar.search.searching}</div>
               )}
               {!searching && searchResults.length === 0 && (
-                <div style={{ padding: '12px 14px', color: 'rgba(200,191,176,0.5)', fontSize: 12 }}>Không tìm thấy từ nào</div>
+                <div style={{ padding: '12px 14px', color: 'rgba(200,191,176,0.5)', fontSize: 12 }}>{t.shell.sidebar.search.noResults}</div>
               )}
               {!searching && searchResults.map((r, i) => (
                 <Link key={i} href={r.lessonId ? `/lesson/${r.lessonId}?word=${encodeURIComponent(r.zh)}` : '#'}
@@ -303,7 +304,7 @@ export default function GlobalShell() {
                         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 16px 4px 52px', textDecoration: 'none', color: 'rgba(200,191,176,0.6)', fontSize: 11, fontFamily: 'JetBrains Mono, monospace', transition: 'color 0.1s' }}
                         onMouseEnter={e => (e.currentTarget.style.color = '#f5f1e8')}
                         onMouseLeave={e => (e.currentTarget.style.color = 'rgba(200,191,176,0.6)')}>
-                        Tất cả {mbCounts.total} bài →
+                        {t.shell.sidebar.reading.all(mbCounts.total)}
                       </Link>
                       {[1,2,3,4,5].map(lvl => {
                         const count = mbCounts.byHsk[lvl] ?? 0;
@@ -315,7 +316,7 @@ export default function GlobalShell() {
                             onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
                             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                             <span style={{ fontSize: 9.5, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.12em', color: lvlColor, textTransform: 'uppercase', fontWeight: 700 }}>HSK {lvl}</span>
-                            <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: 'rgba(200,191,176,0.3)', marginLeft: 'auto' }}>{count} bài →</span>
+                            <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: 'rgba(200,191,176,0.3)', marginLeft: 'auto' }}>{t.shell.sidebar.reading.levelCount(count)}</span>
                           </Link>
                         );
                       })}
@@ -326,13 +327,13 @@ export default function GlobalShell() {
                         onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
                         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                         <span style={{ fontSize: 11, color: 'rgba(200,191,176,0.5)' }}>🎙</span>
-                        <span style={{ fontSize: 12, color: 'rgba(200,191,176,0.75)', fontFamily: 'Be Vietnam Pro, sans-serif' }}>Chép chính tả Tiếng Trung</span>
+                        <span style={{ fontSize: 12, color: 'rgba(200,191,176,0.75)', fontFamily: 'Be Vietnam Pro, sans-serif' }}>{t.shell.sidebar.listen.dictation}</span>
                       </Link>
                       <Link href="/dictation/align" onClick={() => setOpen(false)} style={{ textDecoration: 'none', padding: '5px 8px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8, transition: 'background 0.15s' }}
                         onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
                         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                         <span style={{ fontSize: 11, color: 'rgba(200,191,176,0.5)' }}>✂️</span>
-                        <span style={{ fontSize: 12, color: 'rgba(200,191,176,0.75)', fontFamily: 'Be Vietnam Pro, sans-serif' }}>Cắt audio thủ công</span>
+                        <span style={{ fontSize: 12, color: 'rgba(200,191,176,0.75)', fontFamily: 'Be Vietnam Pro, sans-serif' }}>{t.common.features.align}</span>
                       </Link>
                     </div>
                   ) : sec.key === 'grammar' ? (
@@ -347,7 +348,7 @@ export default function GlobalShell() {
                             onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
                             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                             <span style={{ fontSize: 9.5, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.12em', color: lvlColor, textTransform: 'uppercase', fontWeight: 700 }}>{lvl}</span>
-                            <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: 'rgba(200,191,176,0.3)', marginLeft: 'auto' }}>{n} điểm →</span>
+                            <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: 'rgba(200,191,176,0.3)', marginLeft: 'auto' }}>{t.shell.sidebar.grammar.pointCount(n)}</span>
                           </Link>
                         );
                       })}
@@ -361,7 +362,7 @@ export default function GlobalShell() {
                       const subKey = `${sec.key}-${lvl}`;
                       const isSubOpen = subExpanded[subKey] ?? false;
                       const count = sec.key === 'vocab'
-                        ? `${grp.reduce((s, l) => s + l.vocabCount, 0)} từ`
+                        ? t.shell.sidebar.vocab.wordCount(grp.reduce((s, l) => s + l.vocabCount, 0))
                         : `${grp.length}`;
                       return (
                         <div key={lvl}>
@@ -381,7 +382,7 @@ export default function GlobalShell() {
                                   onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
                                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                                   <span style={{ fontSize: 9, color: 'rgba(200,191,176,0.25)', marginRight: 6, flexShrink: 0 }}>└</span>
-                                  Tất cả từ vựng →
+                                  {t.shell.sidebar.vocab.allWords}
                                 </Link>
                               )}
                               {grp.map(l => (
@@ -426,7 +427,7 @@ export default function GlobalShell() {
             onMouseEnter={e => { if (!pathname.startsWith('/notes')) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
             onMouseLeave={e => { if (!pathname.startsWith('/notes')) e.currentTarget.style.background = 'none'; }}>
             <span style={{ width: 26, height: 26, borderRadius: 6, background: pathname.startsWith('/notes') ? '#e09d3a55' : '#e09d3a33', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>📝</span>
-            <span>Ghi chú của tôi</span>
+            <span>{t.shell.sidebar.notes}</span>
           </Link>
           <div style={{ height: 1, background: 'rgba(255,255,255,0.05)', margin: '2px 16px' }} />
         </nav>
@@ -463,7 +464,7 @@ export default function GlobalShell() {
           <Link href="/" onClick={closeAll} style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'rgba(200,191,176,0.6)', fontSize: 12, transition: 'color 0.15s' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#f5f1e8')}
             onMouseLeave={e => (e.currentTarget.style.color = 'rgba(200,191,176,0.6)')}>
-            <span style={{ fontFamily: 'Noto Serif SC, serif' }}>⌂</span> Trang chủ
+            <span style={{ fontFamily: 'Noto Serif SC, serif' }}>⌂</span> {t.common.features.home}
           </Link>
         </div>
       </aside>
