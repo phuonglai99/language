@@ -55,11 +55,6 @@ interface VocabFix { zh: string; py: string; reason: string }
 const HSK_LIST = /^HSK([1-6])$/;
 const FIXES = path.join(__dirname, '../seed/vocab-fixes.json');
 
-function lessonTopic(title: string): string {
-  const dash = title.indexOf(' – ');
-  return (dash >= 0 ? title.slice(dash + 3) : title).trim();
-}
-
 function minLevel(a: number | null, b: number | null): number | null {
   if (a == null) return b;
   if (b == null) return a;
@@ -76,17 +71,16 @@ class WordStore {
   private insertWord: Database.Statement;
   private getRow: Database.Statement;
   private updateRow: Database.Statement;
-  readonly topicConflicts: string[] = [];
   /** Import spellings attached to a Mandarin Bean word with a different spelling. */
   readonly attached = new Map<number, Set<string>>();
 
   constructor(private db: Database.Database) {
     this.insertWord = db.prepare(`
-      INSERT INTO words (hanzi, pinyin, pinyin_plain, hsk_level, topic, source, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ','now')))
+      INSERT INTO words (hanzi, pinyin, pinyin_plain, hsk_level, source, created_at)
+      VALUES (?, ?, ?, ?, ?, COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ','now')))
     `);
-    this.getRow = db.prepare('SELECT topic, hsk_level, source FROM words WHERE id = ?');
-    this.updateRow = db.prepare('UPDATE words SET hsk_level = ?, topic = ?, source = ? WHERE id = ?');
+    this.getRow = db.prepare('SELECT hsk_level, source FROM words WHERE id = ?');
+    this.updateRow = db.prepare('UPDATE words SET hsk_level = ?, source = ? WHERE id = ?');
   }
 
   private bucket(hanzi: string, pinyin: string): WordEntry[] {
@@ -101,7 +95,7 @@ class WordStore {
     const b = this.bucket(hanzi, pinyin);
     const hit = b.find(e => e.pinyin === pinyin);
     if (hit) return hit.id;
-    const res = this.insertWord.run(hanzi, pinyin, pinyinPlain(pinyin), null, null, 'mandarin_bean', null);
+    const res = this.insertWord.run(hanzi, pinyin, pinyinPlain(pinyin), null, 'mandarin_bean', null);
     const entry = { id: Number(res.lastInsertRowid), hanzi, pinyin, fromMB: true };
     b.push(entry);
     return entry.id;
@@ -109,7 +103,7 @@ class WordStore {
 
   /** Imported / note spelling: closest existing word, else a new one. */
   attach(opts: {
-    hanzi: string; pinyin: string; hsk: number | null; topic: string | null;
+    hanzi: string; pinyin: string; hsk: number | null;
     source: 'import' | 'manual'; createdAt: string | null;
   }): number {
     const { hanzi, pinyin } = opts;
@@ -121,7 +115,7 @@ class WordStore {
       ?? pick(e => neutralToneVariants(e.pinyin, pinyin));
 
     if (!entry) {
-      const res = this.insertWord.run(hanzi, pinyin, pinyinPlain(pinyin), opts.hsk, opts.topic, opts.source, opts.createdAt);
+      const res = this.insertWord.run(hanzi, pinyin, pinyinPlain(pinyin), opts.hsk, opts.source, opts.createdAt);
       entry = { id: Number(res.lastInsertRowid), hanzi, pinyin, fromMB: false };
       b.push(entry);
       return entry.id;
@@ -131,16 +125,10 @@ class WordStore {
       if (!this.attached.has(entry.id)) this.attached.set(entry.id, new Set());
       this.attached.get(entry.id)!.add(pinyin);
     }
-    const cur = this.getRow.get(entry.id) as { topic: string | null; hsk_level: number | null; source: string };
-    let topic = cur.topic;
-    if (opts.topic && cur.topic && cur.topic !== opts.topic) {
-      this.topicConflicts.push(`${hanzi}: "${cur.topic}" giữ, bỏ "${opts.topic}"`);
-    } else if (opts.topic) {
-      topic = opts.topic;
-    }
+    const cur = this.getRow.get(entry.id) as { hsk_level: number | null; source: string };
     // A word that appears in an imported list counts as imported, even if a reading passage introduced it.
     const source = cur.source === 'mandarin_bean' && opts.source === 'import' ? 'import' : cur.source;
-    this.updateRow.run(minLevel(cur.hsk_level, opts.hsk), topic, source, entry.id);
+    this.updateRow.run(minLevel(cur.hsk_level, opts.hsk), source, entry.id);
     return entry.id;
   }
 
@@ -263,14 +251,29 @@ export const p2Words: MigrationStep = {
       { id: string; title: string; level: string | null; created_at: string; data: string }[];
     lessons.sort((a, b) => Number(!HSK_LIST.test(a.title)) - Number(!HSK_LIST.test(b.title)));
 
+    // HSK list sheets are vocabulary only (words.hsk_level). Every other old lesson was an
+    // uploaded lesson and becomes a lessons row (same id) with its words in lesson_words.
+    const insertLesson = db.prepare(`
+      INSERT INTO lessons (id, title, subtitle, format, hsk_level, source, created_at)
+      VALUES (?, ?, ?, 'hsk2', ?, 'import', ?)
+    `);
+    const insertLessonWord = db.prepare(
+      'INSERT OR IGNORE INTO lesson_words (lesson_id, position, word_id, sense_id) VALUES (?, ?, ?, ?)',
+    );
     let vocabRows = 0;
-    const topics = new Map<string, number>();
+    const lessonSummary: string[] = [];
     for (const lesson of lessons) {
       const listLevel = HSK_LIST.exec(lesson.title);
       const hsk = listLevel ? Number(listLevel[1]) : null;
-      const topic = listLevel ? null : lessonTopic(lesson.title);
       const lessonLevel = /^HSK([1-6])$/.exec(lesson.level ?? '');
       const vocab = (JSON.parse(lesson.data) as { vocab?: VocabItem[] }).vocab ?? [];
+      const isLesson = !listLevel;
+      if (isLesson) {
+        if (!lessonLevel) throw new Error(`Lesson "${lesson.title}" has no HSK level (${lesson.level})`);
+        const subtitle = (JSON.parse(lesson.data) as { subtitle?: string }).subtitle ?? null;
+        insertLesson.run(lesson.id, lesson.title, subtitle, Number(lessonLevel[1]), lesson.created_at);
+      }
+      let position = 0;
       for (const v of vocab) {
         const rawZh = v.zh?.trim();
         if (!rawZh) continue;
@@ -283,25 +286,28 @@ export const p2Words: MigrationStep = {
         if (hanzi !== rawZh || cleanPy !== rawPy) cleaned.push(`${rawZh} [${v.py}] → ${hanzi} [${cleanPy}]`);
 
         const wordId = words.attach({
-          hanzi, pinyin: normalizePinyin(hanzi, cleanPy), hsk, topic,
+          hanzi, pinyin: normalizePinyin(hanzi, cleanPy), hsk,
           source: 'import', createdAt: lesson.created_at,
         });
-        if (topic) topics.set(topic, (topics.get(topic) ?? 0) + 1);
         const vi = v.vn?.trim() || null;
         const senseLevel = hsk ?? (lessonLevel ? Number(lessonLevel[1]) : null);
         const posCodes = parsePos(v.pos);
+        let taught: number | null = null;
         for (const pos of posCodes.length ? posCodes : [null]) {
           const senseId = senses.upsert(wordId, `vi\u0000${pos}\u0000${(vi ?? '').toLowerCase()}`, {
             pos, vi, en: null, hsk: senseLevel, source: 'import', mbWordId: null,
           });
           senses.addExample(senseId, v.ex?.zh, v.ex?.vn);
+          taught ??= senseId;
         }
+        if (isLesson) insertLessonWord.run(lesson.id, position++, wordId, taught);
       }
+      if (isLesson) lessonSummary.push(`${lesson.title} (HSK${lessonLevel![1]}, ${position} từ)`);
     }
     const unusedFixes = fixes.filter(f => !usedFixes.has(f.zh));
     if (unusedFixes.length) throw new Error(`vocab-fixes.json entries matched nothing: ${unusedFixes.map(f => f.zh).join(', ')}`);
     log(`imported vocab: ${vocabRows} rows; fixes applied: ${fixes.length}`);
-    log(`topics: ${[...topics].map(([t, n]) => `${t} (${n})`).join(', ')}`);
+    log(`lessons: ${lessonSummary.join('; ')}`);
 
     // ── P2.8 note_items ──────────────────────────────────────────────────────
     const notes = old.prepare('SELECT zh, py, vn, pos, created_at FROM note_items').all() as
@@ -310,7 +316,7 @@ export const p2Words: MigrationStep = {
     for (const n of notes) {
       const hanzi = n.zh.trim();
       const wordId = words.attach({
-        hanzi, pinyin: normalizePinyin(hanzi, n.py), hsk: null, topic: null,
+        hanzi, pinyin: normalizePinyin(hanzi, n.py), hsk: null,
         source: 'manual', createdAt: n.created_at,
       });
       const vi = n.vn?.trim() || null;
@@ -367,7 +373,6 @@ export const p2Words: MigrationStep = {
     log(`word_senses: ${count('SELECT COUNT(*) FROM word_senses')} (vi ${count('SELECT COUNT(*) FROM word_senses WHERE meaning_vi IS NOT NULL')}, en ${count('SELECT COUNT(*) FROM word_senses WHERE meaning_en IS NOT NULL')}, pos NULL ${count('SELECT COUNT(*) FROM word_senses WHERE pos IS NULL')})`);
     log(`sense_examples: ${count('SELECT COUNT(*) FROM sense_examples')}`);
     log(`word_characters: ${count('SELECT COUNT(*) FROM word_characters')}; han_viet filled: ${count('SELECT COUNT(*) FROM words WHERE han_viet IS NOT NULL')}`);
-    if (words.topicConflicts.length) log(`topic conflicts: ${words.topicConflicts.join('; ')}`);
     log(`REVIEW import cells cleaned (${cleaned.length}): ${cleaned.join('; ')}`);
     const attached = [...words.attached].map(([id, set]) => {
       const w = db.prepare('SELECT hanzi, pinyin FROM words WHERE id = ?').get(id) as { hanzi: string; pinyin: string };

@@ -85,14 +85,12 @@ CREATE TABLE words (
   pinyin_plain  TEXT NOT NULL,                   -- huì → hui, lǜ → lv (tìm kiếm không dấu)
   han_viet      TEXT,                            -- hội / bả bả
   hsk_level     INTEGER CHECK (hsk_level BETWEEN 1 AND 7),  -- cấp thấp nhất trong các danh sách HSK 2.0 đã import; NULL nếu không thuộc danh sách nào
-  topic         TEXT,
   source        TEXT NOT NULL CHECK (source IN ('import','mandarin_bean','ai','manual')),
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   UNIQUE (hanzi, pinyin)                         -- 行 xíng và 行 háng là 2 word
 );
 CREATE INDEX words_hsk   ON words(hsk_level);
-CREATE INDEX words_topic ON words(topic) WHERE topic IS NOT NULL;
 CREATE INDEX words_hanzi ON words(hanzi);
 
 -- Từ ↔ chữ: 爸爸 = 爸 + 爸. Bấm vào 1 chữ → mọi từ chứa chữ đó; bộ thủ lấy qua characters.
@@ -231,6 +229,43 @@ CREATE TABLE grammar_exercises (
   explanation  TEXT,
   UNIQUE (grammar_id, position)
 );
+
+-- ═══════════════════════════════════════════════════════════ 4b. BÀI HỌC
+-- Bài học = bài upload (.docx): tên + cấp + từ mới + ngữ pháp. Danh sách HSK từ Excel
+-- KHÔNG phải bài học — đó chỉ là từ vựng, đánh dấu bằng words.hsk_level.
+CREATE TABLE lessons (
+  id          TEXT PRIMARY KEY,                -- nanoid; giữ id cũ nên link /lesson/<id> không đổi
+  title       TEXT NOT NULL,                   -- "Bài 2 – Giao thông"
+  subtitle    TEXT,
+  format      TEXT NOT NULL DEFAULT 'hsk2' CHECK (format IN ('hsk2','hsk3')),
+  hsk_level   INTEGER NOT NULL,
+  source      TEXT NOT NULL CHECK (source IN ('import','ai','manual')),  -- import = upload file (Claude phân tích)
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  CHECK ((format = 'hsk2' AND hsk_level BETWEEN 1 AND 6)
+      OR (format = 'hsk3' AND hsk_level BETWEEN 1 AND 7))   -- HSK 3.0: 7 = cấp 7–9
+);
+CREATE INDEX lessons_level ON lessons(format, hsk_level);
+
+-- Từ mới của bài, theo thứ tự trong bài; sense_id = nghĩa được dạy trong bài này
+CREATE TABLE lesson_words (
+  lesson_id  TEXT NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+  position   INTEGER NOT NULL,
+  word_id    INTEGER NOT NULL REFERENCES words(id) ON DELETE CASCADE,
+  sense_id   INTEGER REFERENCES word_senses(id) ON DELETE SET NULL,
+  PRIMARY KEY (lesson_id, position),
+  UNIQUE (lesson_id, word_id)
+) WITHOUT ROWID;
+CREATE INDEX lesson_words_word ON lesson_words(word_id);
+
+-- Ngữ pháp của bài, theo thứ tự trong bài (ngữ pháp vẫn chia theo cấp ở grammar_points.hsk_level)
+CREATE TABLE lesson_grammar (
+  lesson_id   TEXT NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+  position    INTEGER NOT NULL,
+  grammar_id  INTEGER NOT NULL REFERENCES grammar_points(id) ON DELETE CASCADE,
+  PRIMARY KEY (lesson_id, position),
+  UNIQUE (lesson_id, grammar_id)
+) WITHOUT ROWID;
+CREATE INDEX lesson_grammar_grammar ON lesson_grammar(grammar_id);
 
 -- ═══════════════════════════════════════════════════════════ 5. BÀI KIỂM TRA (format HSK)
 -- Hiện dùng chuẩn HSK 2.0 (format = 'hsk2'): HSK1–2 nghe + đọc; HSK3–6 nghe + đọc + viết. 'hsk3' để mở rộng.

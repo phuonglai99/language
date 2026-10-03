@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extractSegmentsFromDocx, parseHskXlsx } from '@/lib/parse-docx';
 import { analyzeLesson } from '@/lib/claude';
-import { importLessons } from '@/server';
+import { importLesson, importWordLists } from '@/server';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -27,8 +27,8 @@ export async function POST(req: NextRequest) {
       if (lessonDrafts.length === 0) {
         return NextResponse.json({ error: 'Không đọc được dữ liệu từ file Excel' }, { status: 400 });
       }
-      const lessons = await importLessons(lessonDrafts);
-      return NextResponse.json({ lessons });
+      const lists = await importWordLists(lessonDrafts);
+      return NextResponse.json({ lists });
     }
 
     // .docx: tách sections rồi dùng Claude phân tích
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     }
     const baseName = file.name.replace(/\.docx$/, '');
     const analyzed = await analyzeLesson(segments, baseName);
-    const [lesson] = await importLessons([analyzed]);
+    const lesson = await importLesson(analyzed);
     return NextResponse.json({ lesson });
   } catch (err) {
     console.error('Upload error:', err);

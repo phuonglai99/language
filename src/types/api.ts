@@ -147,13 +147,12 @@ export interface CharacterDetailDTO {
 
 /** Sidebar / home card for a vocabulary lesson (an HSK list or an uploaded topic). */
 export interface LessonMetaDTO {
-  /** "hsk-<n>" or "topic-<slug>" (see shared/lessons.ts). */
+  /** "hsk-<n>" (HSK word list) or a lessons.id (see shared/lessons.ts). */
   id: string;
   title: string;
   subtitle: string;
-  /** "HSK2"; '' when unknown. */
+  /** "HSK2" (HSK 2.0) or "HSK 3.0 · 2". */
   level: string;
-  topic?: string;
   createdAt: string;
   vocabCount: number;
   grammarCount: number;

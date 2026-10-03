@@ -3,14 +3,16 @@ import { getDb } from '../db/connection';
 import { addSenseExample, findOrCreateSense, findOrCreateWord } from '../repos/words';
 import { firstReading, hanChars, stripNotes } from '@/shared/text';
 import { ROLE_FROM_BOTU } from '@/shared/hanzi';
-import { hskLessonId, lessonTitleToTopic, topicLessonId } from '@/shared/lessons';
+import { hskLessonId } from '@/shared/lessons';
+import { nanoid } from '@/lib/nanoid';
 import type { Lesson } from '@/types';
 
 /**
- * Writes an uploaded lesson (Excel HSK list, or a .docx analysed by Claude) into the v4
- * tables. A lesson is not stored as such: HSK list sheets mark words with hsk_level,
- * any other lesson marks its words with a topic; grammar becomes grammar_points
- * (source_data 'import') at the lesson's level. Returns the virtual lesson ids.
+ * Writes uploads into the v4 tables:
+ *   - Excel: vocabulary only. Sheets named HSK1–HSK6 mark their words with hsk_level;
+ *     other sheets just add the words to the dictionary. No lesson is created.
+ *   - .docx (analysed by Claude): a lesson — a lessons row, its words in lesson_words
+ *     (with the sense taught) and its grammar in grammar_points + lesson_grammar.
  */
 type LessonDraft = Omit<Lesson, 'id' | 'createdAt'>;
 
@@ -42,29 +44,33 @@ function saveComponents(db: Database.Database, blocks: LessonDraft['vocab'][numb
   }
 }
 
-function importVocab(db: Database.Database, draft: LessonDraft, mark: { hsk: number | null; topic: string | null }, senseLevel: number | null) {
+/** Adds the vocabulary; returns [word_id, sense_id] per item, in order. */
+function importVocab(db: Database.Database, draft: LessonDraft, listLevel: number | null, senseLevel: number | null): [number, number | null][] {
   const markWord = db.prepare(`
     UPDATE words SET
       hsk_level = CASE WHEN ? IS NOT NULL AND (hsk_level IS NULL OR ? < hsk_level) THEN ? ELSE hsk_level END,
-      topic = COALESCE(topic, ?),
       source = CASE WHEN source = 'mandarin_bean' THEN 'import' ELSE source END,
       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
     WHERE id = ?
   `);
   const ensureChar = db.prepare("INSERT OR IGNORE INTO characters (char, crawl_status) VALUES (?, 'pending')");
+  const out: [number, number | null][] = [];
   for (const v of draft.vocab) {
     const hanzi = stripNotes(v.zh ?? '');
     if (!hanzi) continue;
     for (const ch of hanChars(hanzi)) ensureChar.run(ch);
     const wordId = findOrCreateWord(db, hanzi, firstReading(stripNotes(v.py ?? '')), 'import');
-    markWord.run(mark.hsk, mark.hsk, mark.hsk, mark.topic, wordId);
+    markWord.run(listLevel, listLevel, listLevel, wordId);
     const senseId = findOrCreateSense(db, wordId, v.vn ?? '', v.pos ?? '', 'import', senseLevel);
     if (senseId != null && v.ex?.zh) addSenseExample(db, senseId, v.ex.zh, v.ex.vn ?? '');
     saveComponents(db, v.botu);
+    out.push([wordId, senseId]);
   }
+  return out;
 }
 
-function importGrammar(db: Database.Database, draft: LessonDraft, level: number | null) {
+/** Adds the grammar points; returns their ids, in order. */
+function importGrammar(db: Database.Database, draft: LessonDraft, level: number | null): number[] {
   const insertPoint = db.prepare(`
     INSERT INTO grammar_points (source_data, title, title_vi, formula, explanation, hsk_level, comparisons)
     VALUES ('import', ?, ?, ?, ?, ?, ?)
@@ -76,6 +82,7 @@ function importGrammar(db: Database.Database, draft: LessonDraft, level: number 
     INSERT INTO grammar_exercises (grammar_id, position, type, question, blank, options, answer, explanation)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
+  const ids: number[] = [];
   for (const g of draft.grammar ?? []) {
     if (!g.title?.trim()) continue;
     const id = Number(insertPoint.run(
@@ -87,23 +94,35 @@ function importGrammar(db: Database.Database, draft: LessonDraft, level: number 
     (g.exercises ?? []).filter(x => x.type === 'fill' || x.type === 'choice').forEach((x, i) =>
       insertExercise.run(id, i, x.type, x.question ?? '', x.blank ?? null,
         x.options ? JSON.stringify(x.options) : null, x.answer ?? '', x.explanation ?? null));
+    ids.push(id);
   }
+  return ids;
 }
 
-/** One draft per Excel sheet; sheets named HSK1–HSK6 are HSK lists, others become topics. */
-export async function importLessons(drafts: LessonDraft[]): Promise<{ id: string; title: string; vocabCount: number }[]> {
+/** Excel: one draft per sheet, vocabulary only. Returns the HSK word lists touched. */
+export async function importWordLists(drafts: LessonDraft[]): Promise<{ id: string | null; title: string; vocabCount: number }[]> {
   const db = getDb();
   return db.transaction(() => drafts.map(draft => {
     const listLevel = levelOf(draft.title);
-    const lessonLevel = levelOf(draft.level);
-    if (listLevel != null) {
-      importVocab(db, draft, { hsk: listLevel, topic: null }, listLevel);
-      importGrammar(db, draft, listLevel);
-      return { id: hskLessonId(listLevel), title: `HSK${listLevel}`, vocabCount: draft.vocab.length };
-    }
-    const topic = lessonTitleToTopic(draft.title);
-    importVocab(db, draft, { hsk: null, topic }, lessonLevel);
-    importGrammar(db, draft, lessonLevel);
-    return { id: topicLessonId(topic), title: topic, vocabCount: draft.vocab.length };
+    importVocab(db, draft, listLevel, listLevel ?? levelOf(draft.level));
+    return { id: listLevel ? hskLessonId(listLevel) : null, title: draft.title, vocabCount: draft.vocab.length };
   }))();
+}
+
+/** .docx: one lesson with its words and grammar. The lesson's HSK 2.0 level comes from the draft. */
+export async function importLesson(draft: LessonDraft): Promise<{ id: string; title: string; vocabCount: number }> {
+  const level = levelOf(draft.level);
+  if (level == null) throw new Error(`Không xác định được cấp HSK của bài ("${draft.level}")`);
+  const db = getDb();
+  return db.transaction(() => {
+    const id = nanoid(12);
+    db.prepare(`
+      INSERT INTO lessons (id, title, subtitle, format, hsk_level, source) VALUES (?, ?, ?, 'hsk2', ?, 'import')
+    `).run(id, draft.title.trim(), draft.subtitle?.trim() || null, level);
+    const insertWord = db.prepare('INSERT OR IGNORE INTO lesson_words (lesson_id, position, word_id, sense_id) VALUES (?, ?, ?, ?)');
+    importVocab(db, draft, null, level).forEach(([wordId, senseId], i) => insertWord.run(id, i, wordId, senseId));
+    const insertGrammar = db.prepare('INSERT INTO lesson_grammar (lesson_id, position, grammar_id) VALUES (?, ?, ?)');
+    importGrammar(db, draft, level).forEach((grammarId, i) => insertGrammar.run(id, i, grammarId));
+    return { id, title: draft.title.trim(), vocabCount: draft.vocab.length };
+  })();
 }

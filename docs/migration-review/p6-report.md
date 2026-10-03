@@ -1,6 +1,6 @@
 # Báo cáo đối chiếu P6 — DB cũ ↔ DB v4
 
-Sinh bởi `npm run migrate:v4:report` lúc 2026-10-02T12:11:40.493Z.
+Sinh bởi `npm run migrate:v4:report` lúc 2026-10-03T04:53:25.683Z.
 
 ## 1. Tổng quan
 
@@ -10,7 +10,7 @@ Sinh bởi `npm run migrate:v4:report` lúc 2026-10-02T12:11:40.493Z.
 | `integrity_check` | | ok |
 | `foreign_key_check` | | không lỗi |
 
-## 2. Đối chiếu số liệu — 22/22 đạt
+## 2. Đối chiếu số liệu — 27/27 đạt
 
 | Nhóm | Kiểm tra | DB cũ | DB mới | Kỳ vọng | |
 |---|---|---|---|---|---|
@@ -23,6 +23,11 @@ Sinh bởi `npm run migrate:v4:report` lúc 2026-10-02T12:11:40.493Z.
 | Từ vựng | Ví dụ của vocab → sense_examples | 5.067 | 5.067 | bằng nhau | ✅ |
 | Từ vựng | (wordId, definition) Mandarin Bean → nghĩa en | 7.532 | 7.532 | bằng nhau | ✅ |
 | Từ vựng | Chữ trong word_characters thiếu ở characters | 0 | 0 | bằng nhau | ✅ |
+| Bài học | Bài upload → lessons | 6 | 6 | bằng nhau | ✅ |
+| Bài học | Bài giữ đúng cấp HSK (lessons.level) | 6 | 6 | bằng nhau | ✅ |
+| Bài học | Từ mới của bài → lesson_words | 65 | 65 | bằng nhau | ✅ |
+| Bài học | lesson_words có nghĩa được dạy (sense_id) | 65 | 65 | bằng nhau | ✅ |
+| Bài học | Ngữ pháp của bài → lesson_grammar | 10 | 10 | bằng nhau | ✅ |
 | Bài khóa | mb_lessons → passages | 729 | 729 | bằng nhau | ✅ |
 | Bài khóa | Câu | 6.629 | 6.629 | bằng nhau | ✅ |
 | Bài khóa | Token | 119.864 | 119.864 | bằng nhau | ✅ |
@@ -66,7 +71,7 @@ Sinh bởi `npm run migrate:v4:report` lúc 2026-10-02T12:11:40.493Z.
 
 ### 3.2 Từ vựng (20)
 
-| Từ | Pinyin | HSK | Chủ đề | Nguồn | Nghĩa |
+| Từ | Pinyin | HSK | Bài học | Nguồn | Nghĩa |
 |---|---|---|---|---|---|
 | 早上 | zǎoshang | 2 |  | import | ?: early morning · n: buổi sáng |
 | 行政 | xíngzhèng | 6 |  | import | ?: (attributive) administrative; executive · n: Hành chính |

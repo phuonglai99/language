@@ -66,6 +66,20 @@ check('Từ vựng', '(wordId, definition) Mandarin Bean → nghĩa en', mbPairs
 check('Từ vựng', 'Chữ trong word_characters thiếu ở characters', 0,
   one(db, 'SELECT COUNT(*) FROM word_characters wc LEFT JOIN characters c ON c.char = wc.char WHERE c.char IS NULL'));
 
+// ── Lessons (uploaded .docx lessons; HSK1–6 Excel sheets are word lists, not lessons) ──
+const oldLessons = old.prepare("SELECT id, level, data FROM lessons WHERE title NOT GLOB 'HSK[1-6]'").all() as { id: string; level: string; data: string }[];
+check('Bài học', 'Bài upload → lessons', oldLessons.length, one(db, 'SELECT COUNT(*) FROM lessons'));
+check('Bài học', 'Bài giữ đúng cấp HSK (lessons.level)', oldLessons.length,
+  oldLessons.filter(l => one(db, "SELECT COUNT(*) FROM lessons WHERE id = ? AND format = 'hsk2' AND 'HSK' || hsk_level = ?", l.id, l.level) === 1).length);
+check('Bài học', 'Từ mới của bài → lesson_words',
+  oldLessons.reduce((n, l) => n + ((JSON.parse(l.data) as { vocab?: unknown[] }).vocab ?? []).length, 0),
+  one(db, 'SELECT COUNT(*) FROM lesson_words'));
+check('Bài học', 'lesson_words có nghĩa được dạy (sense_id)', one(db, 'SELECT COUNT(*) FROM lesson_words'),
+  one(db, 'SELECT COUNT(*) FROM lesson_words WHERE sense_id IS NOT NULL'));
+check('Bài học', 'Ngữ pháp của bài → lesson_grammar',
+  oldLessons.reduce((n, l) => n + ((JSON.parse(l.data) as { grammar?: unknown[] }).grammar ?? []).length, 0),
+  one(db, 'SELECT COUNT(*) FROM lesson_grammar'));
+
 // ── Passages ─────────────────────────────────────────────────────────────────
 check('Bài khóa', 'mb_lessons → passages', one(old, 'SELECT COUNT(*) FROM mb_lessons'), one(db, 'SELECT COUNT(*) FROM passages'));
 check('Bài khóa', 'Câu', one(old, 'SELECT SUM(json_array_length(content)) FROM mb_lessons'),
@@ -159,12 +173,14 @@ for (const rowid of sampleIds("SELECT rowid FROM characters WHERE crawl_status =
   lines.push(`| ${esc(c.char)} | ${esc(c.han_viet)} | ${esc(c.radical)} | ${esc([c.formation, c.formation2].filter(Boolean).join(' + '))} | ${esc(c.frequency)} | ${esc(c.comp)} | ${c.strokes == null ? '—' : c.strokes ? 'có' : 'mảng trần'} |`);
 }
 lines.push('', '### 3.2 Từ vựng (20)', '');
-lines.push('| Từ | Pinyin | HSK | Chủ đề | Nguồn | Nghĩa |', '|---|---|---|---|---|---|');
+lines.push('| Từ | Pinyin | HSK | Bài học | Nguồn | Nghĩa |', '|---|---|---|---|---|---|');
 for (const id of sampleIds('SELECT id FROM words', 20)) {
-  const w = db.prepare('SELECT hanzi, pinyin, hsk_level, topic, source FROM words WHERE id = ?').get(id) as Record<string, unknown>;
+  const w = db.prepare(`SELECT hanzi, pinyin, hsk_level, source,
+    (SELECT group_concat(l.title, ', ') FROM lesson_words lw JOIN lessons l ON l.id = lw.lesson_id WHERE lw.word_id = words.id) AS lessons
+    FROM words WHERE id = ?`).get(id) as Record<string, unknown>;
   const senses = (db.prepare(`SELECT COALESCE(pos, '?') || ': ' || COALESCE(meaning_vi, meaning_en) FROM word_senses WHERE word_id = ? ORDER BY position`)
     .pluck().all(id) as string[]).join(' · ');
-  lines.push(`| ${esc(w.hanzi)} | ${esc(w.pinyin)} | ${esc(w.hsk_level)} | ${esc(w.topic)} | ${esc(w.source)} | ${esc(senses.slice(0, 200))} |`);
+  lines.push(`| ${esc(w.hanzi)} | ${esc(w.pinyin)} | ${esc(w.hsk_level)} | ${esc(w.lessons)} | ${esc(w.source)} | ${esc(senses.slice(0, 200))} |`);
 }
 lines.push('', '### 3.3 Bài khóa (5 bài × 3 câu đầu)', '');
 for (const id of sampleIds('SELECT id FROM passages', 5)) {

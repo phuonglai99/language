@@ -12,7 +12,7 @@ Lập ngày 2026-10-01. Tài liệu này chia nhỏ từng phase thành task. C�
 | Chủ đề | Quyết định |
 |---|---|
 | Engine | Giữ SQLite: better-sqlite3 + SQL thuần, không ORM. Hàm trong `repos/` vẫn async |
-| Bài học | Bỏ bảng `lessons`. Từ vựng đánh dấu bằng `words.hsk_level` / `words.topic`. Ngữ pháp chỉ chia theo `hsk_level` |
+| Bài học | Bảng `lessons` (bài upload `.docx`: tên, `hsk_level`, `format`) + bảng nối `lesson_words`, `lesson_grammar` (chốt 2026-10-03). Danh sách HSK1–6 từ Excel chỉ là từ vựng (`words.hsk_level`). Ngữ pháp vẫn chia theo `hsk_level` |
 | Ngữ pháp | `source_data` = `hanzii` / `import`. 437 điểm không có cấp → nhóm "Chưa xếp cấp" (`hsk_level = NULL`, chia theo `category`) |
 | Nguồn từ vựng | `source` = `import` (từ file upload, gồm cả danh sách HSK1–6) / `mandarin_bean` / `ai` / `manual` |
 | Bài khóa | `source` = `mandarin_bean` / `ai` / `manual`. Bản dịch vi/en nằm trên từng câu |
@@ -147,7 +147,7 @@ Kiểm tra:
 |---|---|
 | P2.1 | Seed `parts_of_speech` (n, v, adj, adv, m, conj, pron, prep, num, part, propn, intj, vo, modal, phrase) kèm bảng map từ nhãn tiếng Việt cũ |
 | P2.2 | `words` lần 1 từ 6 danh sách HSK1–6 (`lessons.data.vocab`): chuẩn hoá pinyin, gộp từ trùng, `hsk_level` lấy cấp thấp nhất, `source = 'import'` |
-| P2.3 | Thêm từ của 3 bài chủ đề: gán `topic`. Từ đã có thì chỉ cập nhật `topic` |
+| P2.3 | 6 bài upload → `lessons` (giữ id, cấp, tên) + `lesson_words` (kèm nghĩa được dạy) |
 | P2.4 | `words` từ token Mandarin Bean có `wordId`: khớp theo (hanzi, pinyin đã chuẩn hoá) hoặc tạo mới với `source = 'mandarin_bean'`; ghi `mb_word_id` vào `word_senses`; `hsk_level` lấy từ token nếu từ chưa có cấp |
 | P2.5 | `word_senses`: nghĩa vi từ vocab (ô từ loại gộp như "Động từ / Danh từ" tách thành 2 nghĩa) và nghĩa en từ mỗi cặp (wordId, definition). Tất cả `verified = 0` |
 | P2.6 | `sense_examples` từ `vocab[].ex` |
@@ -295,7 +295,7 @@ Làm trên `data/hsk.db`. App mặc định vẫn dùng `lessons.db` cho tới P
 | 4 | `/api/dictation/**`, `/dictation/**` | UI căn audio gửi cả pinyin khi lưu |
 | 5 | `/api/kanji/[char]`, panel chữ, flashcard | Thêm `/api/strokes?chars=`. Panel chữ dùng dữ liệu nét trong DB. Sửa "Phổ biến" theo `frequency` |
 | 6 | `/api/vocab`, `/api/search`, `/vocab/[level]` | Popup tra từ trong bài khóa đọc theo `s` của token |
-| 7 | `/api/upload`, `/api/lessons/**`, `/lesson/[id]` | Route mới `/vocab/hsk/[level]`, `/vocab/topic/[topic]`. `MatchGame` dùng id sense. Chuyển hướng 12 id bài cũ sang route mới |
+| 7 | `/api/upload`, `/api/lessons/**`, `/lesson/[id]` | Bài học đọc từ `lessons`; danh sách HSK ở `/lesson/hsk-<n>`. `MatchGame` dùng id sense. Chuyển hướng 12 id bài cũ sang route mới |
 | 8 | Sidebar `GlobalShell`, trang chủ | Menu theo cấu trúc mới |
 
 ### P7.4 Script
@@ -324,14 +324,13 @@ Xong khi:
 | Toàn bộ | `4296e8e` | `npm run build` đạt; gọi trực tiếp 21 route handler trên bản sao DB đều trả đúng |
 
 Thay đổi so với plan, phát hiện khi làm:
-- **Bài học là "bài ảo"** `/lesson/hsk-<n>` và `/lesson/topic-<slug>`, không làm route mới `/vocab/hsk/...`. Giao diện học (flashcard, quiz, ghép thẻ) không phải sửa. 12 id cũ chuyển hướng trong `next.config.ts`.
+- **Bài học:** `/lesson/<id>` đọc bảng `lessons` (6 bài upload, giữ id cũ); `/lesson/hsk-<n>` là danh sách từ HSK. Giao diện học (flashcard, quiz, ghép thẻ) không phải sửa. Chỉ 6 id danh sách HSK cũ cần chuyển hướng (`next.config.ts`).
 - **`words.hsk_level` chỉ lấy từ danh sách HSK 2.0 đã import.** Mandarin Bean gắn cấp theo thang HSK 3.0 (có cấp 7); trộn 2 thang làm 65 từ bị kéo về HSK1. Cấp của Mandarin Bean giữ ở `word_senses.hsk_level`.
-- **Cấp của bài chủ đề không còn lưu ở đâu.** Đang suy ra gần đúng: 2/6 bài hiện HSK1 thay vì HSK2. Cần chốt cách sửa (xem mục "Còn mở" bên dưới).
+- **Thêm lại bảng `lessons`** (chốt 2026-10-03), vì bỏ nó làm mất cấp của bài: 2/6 bài từng hiện HSK1. Giờ cả 6 bài đúng HSK2; từ, nghĩa, ví dụ, thứ tự và ngữ pháp khớp 100% dữ liệu cũ.
 - **Build:** đường dẫn tính từ `process.cwd()` phải có `/* turbopackIgnore: true */`, nếu không Turbopack gom cả dự án và lỗi ở symlink `scripts/venv`.
 
 **Chưa kiểm tra được trên trình duyệt:** trình duyệt tích hợp không chạy được dev server (macOS chặn quyền truy cập thư mục `Desktop`, lỗi `EPERM uv_cwd`). Cần chạy `npm run dev` và đi qua từng trang trước P8.
 
-**Còn mở:** lưu cấp cho bài chủ đề. Phương án đề xuất: bảng nhỏ `topics(name PK, hsk_level, created_at)` và `words.topic` trỏ tới `topics.name`. Đây là metadata của chủ đề, không phải bảng nối từ ↔ bài.
 
 ---
 

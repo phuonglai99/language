@@ -123,7 +123,6 @@ Hai nguồn đầu trùng nhau 2.835 từ.
 | `traditional` | ⚠️ không có. Chuyển đổi tự động bằng thư viện (OpenCC) |
 | `han_viet` | 🔧 ghép `characters.han_viet` từng chữ. ⚠️ chữ có nhiều âm Hán Việt ("nhĩ.nễ") cần chọn tay |
 | `hsk_level` | 🔧 cấp thấp nhất trong các bài "HSK1".."HSK6" (từ xuất hiện ở 2 cấp giữ cấp thấp hơn). **Không** lấy `content[][].hsk` của Mandarin Bean (thang HSK 3.0, có cấp 7); cấp đó nằm ở `word_senses.hsk_level` |
-| `topic` | 🔧 `lessons.title` của 3 bài chủ đề ("Bài 2 – Giao thông" → "Giao thông") |
 | `source` | 🔧 `import` / `mandarin_bean` / `manual` (từ ghi chú) |
 | *(bỏ `mb_word_id`)* | Chuyển xuống `word_senses.mb_word_id`: 1 `wordId` là 1 mục từ điển; cùng (chữ, pinyin) có thể có nhiều `wordId` (钱 "tiền" / "họ Tiền") |
 | `created_at` | ✅ `lessons.created_at` / `note_items.created_at` |
@@ -153,6 +152,19 @@ Các điểm ⚠️ của bảng này:
 | `zh`, `vi` | ✅ `vocab[].ex.zh`, `vocab[].ex.vn` (5.067 ví dụ) |
 | `pinyin`, `en` | ⚠️ không có |
 | *(cho từ Mandarin Bean)* | 🔧 có thể tự lấy câu bài khóa chứa token đó làm ví dụ (thiếu bản dịch) |
+
+### 2.2b Bài học (`lessons`, `lesson_words`, `lesson_grammar`)
+
+Chỉ 6 bài upload từ `.docx` là bài học. 6 sheet HSK1–HSK6 từ Excel chỉ là danh sách từ (`words.hsk_level`), không thành bài.
+
+| Bảng / cột | Nguồn |
+|---|---|
+| `lessons.id` | ✅ `lessons.id` cũ (nanoid), nên link `/lesson/<id>` không đổi |
+| `lessons.title`, `subtitle` | ✅ `lessons.title`, `data.subtitle` |
+| `lessons.hsk_level`, `format` | ✅ `lessons.level` ("HSK2" → 2), `format = 'hsk2'` |
+| `lessons.source` | 🔧 `'import'` |
+| `lesson_words` | ✅ `data.vocab[]` theo thứ tự; `sense_id` = nghĩa được tạo/khớp từ dòng vocab đó (65 dòng) |
+| `lesson_grammar` | ✅ `data.grammar[]` theo thứ tự → `grammar_points` vừa tạo ở P4 (10 dòng) |
 
 ### 2.3 Bài khóa
 

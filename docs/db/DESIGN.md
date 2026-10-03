@@ -160,7 +160,7 @@ character_strokes(char PK → characters, data JSON, has_medians 0/1, source)
 
 **Đánh dấu bằng cột, không dùng bảng nối `lesson_words`:**
 - 6 "bài" HSK1–HSK6 thực chất là danh sách từ theo cấp → `words.hsk_level`, lấy cấp **thấp nhất**.
-- 3 bài chủ đề ("Bài 2 – Giao thông"…) → `words.topic`.
+- 6 bài upload từ `.docx` → bảng `lessons` (xem 4.2b).
 - Đây là 2 cột độc lập, nên một từ vừa thuộc HSK2 vừa thuộc chủ đề "Giao thông" vẫn lưu được. Dữ liệu thật: 34/65 từ của các bài chủ đề đã có trong danh sách HSK.
 - Giới hạn: một từ chỉ thuộc được 1 chủ đề. Khi cần nhiều chủ đề thì mới thêm bảng nối.
 
@@ -179,6 +179,23 @@ character_strokes(char PK → characters, data JSON, has_medians 0/1, source)
 - Vocab từ bài HSK chỉ có nghĩa tiếng Việt. Từ Mandarin Bean chỉ có nghĩa tiếng Anh.
 - Hai nguồn trùng nhau 2.835 từ, nhưng **không ghép tự động được nghĩa vi với nghĩa en**.
 - Sau import chúng là các sense riêng. Cần một bước AI ghép, có người duyệt (Phase 9).
+
+### 4.2b Bài học (chốt 2026-10-03)
+
+Ban đầu bảng `lessons` bị bỏ và từ vựng được đánh dấu bằng `words.topic`. Hệ quả là cấp HSK của bài không còn lưu ở đâu: 2/6 bài bị đoán ra HSK1 thay vì HSK2. Vì vậy bảng bài học được thêm lại, nhưng chỉ chứa phần riêng của bài:
+
+```
+lessons(id, title, subtitle, format 'hsk2'|'hsk3', hsk_level, source, created_at)
+lesson_words(lesson_id → lessons, position, word_id → words, sense_id → word_senses)
+lesson_grammar(lesson_id → lessons, position, grammar_id → grammar_points)
+```
+
+- **Bài học** = bài upload `.docx`: tên, cấp và chuẩn (`format`), từ mới, ngữ pháp. **Excel chỉ chứa từ mới**, nên danh sách HSK1–6 không phải bài học; nó vẫn là `words.hsk_level`, hiển thị ở `/lesson/hsk-<n>`.
+- **Liên kết dùng bảng nối, không dùng cột JSON:** có khoá ngoại thật, giữ thứ tự trong bài, tra được cả 2 chiều.
+- **`lesson_words.sense_id`** là nghĩa được dạy trong bài, nên thẻ học hiện đúng nghĩa của bài, không phải nghĩa đầu tiên của từ.
+- **Ngữ pháp vẫn chia theo cấp** (`grammar_points.hsk_level`); `lesson_grammar` chỉ cho biết bài nào dạy điểm nào.
+- **Xoá một bài** chỉ xoá bài và các liên kết; từ và điểm ngữ pháp vẫn giữ trong từ điển và trang ngữ pháp.
+- **Bỏ cột `words.topic`.**
 
 ### 4.3 Bài khóa
 

@@ -75,14 +75,18 @@ export const p4Grammar: MigrationStep = {
     log(`hanzii: ${rows.length} points, ${hanziiExamples} examples, ${noFormula} without a "Cấu trúc:" line`);
 
     // ── P4.3 grammar from uploaded lessons ──────────────────────────────────
-    const lessons = old.prepare('SELECT title, level, created_at, data FROM lessons').all() as
-      { title: string; level: string | null; created_at: string; data: string }[];
+    const lessons = old.prepare('SELECT id, title, level, created_at, data FROM lessons').all() as
+      { id: string; title: string; level: string | null; created_at: string; data: string }[];
+    const isLesson = db.prepare('SELECT 1 FROM lessons WHERE id = ?').pluck();
+    const insertLessonGrammar = db.prepare('INSERT INTO lesson_grammar (lesson_id, position, grammar_id) VALUES (?, ?, ?)');
+    let linked = 0;
     let points = 0;
     let examples = 0;
     let exercises = 0;
     let comparisons = 0;
     for (const lesson of lessons) {
       const level = /^HSK([1-6])$/.exec(lesson.level ?? '');
+      let position = 0;
       for (const g of (JSON.parse(lesson.data) as { grammar?: LessonGrammar[] }).grammar ?? []) {
         if (!g.title?.trim()) throw new Error(`Grammar point without title in "${lesson.title}"`);
         const cmp = g.comparisons?.length ? JSON.stringify(g.comparisons) : null;
@@ -93,6 +97,10 @@ export const p4Grammar: MigrationStep = {
         );
         const id = Number(lastInsertRowid);
         points++;
+        if (isLesson.get(lesson.id)) {
+          insertLessonGrammar.run(lesson.id, position++, id);
+          linked++;
+        }
         if (cmp) comparisons += g.comparisons!.length;
         (g.examples ?? []).filter(e => e.zh?.trim()).forEach((e, i) => {
           insertExample.run(id, i, e.zh!.trim(), null, e.vn?.trim() || null, e.note?.trim() || null);
@@ -108,7 +116,7 @@ export const p4Grammar: MigrationStep = {
         });
       }
     }
-    log(`import: ${points} points, ${examples} examples, ${exercises} exercises, ${comparisons} comparisons`);
+    log(`import: ${points} points (${linked} linked to their lesson), ${examples} examples, ${exercises} exercises, ${comparisons} comparisons`);
 
     const byLevel = db.prepare(
       'SELECT hsk_level, COUNT(*) AS n FROM grammar_points GROUP BY hsk_level ORDER BY hsk_level',
