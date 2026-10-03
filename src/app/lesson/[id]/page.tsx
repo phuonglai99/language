@@ -9,6 +9,7 @@ import NoteModal from '@/app/components/NoteModal';
 import { VocabListCard } from '@/app/components/VocabListCard';
 import { Pagination } from '@/app/components/Pagination';
 import { frequencyLabel } from '@/shared/hanzi';
+import { speakChinese } from '@/lib/speech';
 
 // ─── Botu renderer ────────────────────────────────────────────────────────────
 
@@ -360,16 +361,7 @@ export default function LessonPage() {
     });
   }, [id, searchParams]);
 
-  const speak = useCallback((text: string) => {
-    if (!window.speechSynthesis) return;
-    speechSynthesis.cancel();
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.lang = 'zh-CN'; utt.rate = 0.85;
-    const voices = speechSynthesis.getVoices();
-    const zh = voices.find(v => v.lang === 'zh-CN') || voices.find(v => v.lang.startsWith('zh'));
-    if (zh) utt.voice = zh;
-    speechSynthesis.speak(utt);
-  }, []);
+  const speak = useCallback((text: string) => { speakChinese(text); }, []);
 
   function shuffleArr<T>(arr: T[]): T[] {
     const a = [...arr];

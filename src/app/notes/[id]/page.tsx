@@ -5,17 +5,12 @@ import { useParams, useRouter } from 'next/navigation';
 import type { VocabCard } from '@/types';
 import { Pagination } from '@/app/components/Pagination';
 import QuizMode from '../../lesson/[id]/QuizMode';
+import { speakChinese } from '@/lib/speech';
 
 interface NoteFolder { id: string; name: string; isSystem: boolean; createdAt: string; itemCount: number; }
 interface NoteItem { id: string; folderId: string; zh: string; py: string; vn: string; pos: string; sourceLessonId: string | null; createdAt: string; }
 
-function speak(text: string) {
-  if (typeof window === 'undefined') return;
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'zh-CN'; u.rate = 0.85;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(u);
-}
+const speak = (text: string) => { speakChinese(text); };
 
 function noteItemToVocabCard(item: NoteItem): VocabCard {
   return { id: item.id, zh: item.zh, py: item.py, vn: item.vn, pos: item.pos, botu: [], ex: { zh: '', vn: '' } };

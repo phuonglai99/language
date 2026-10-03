@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { VocabListCard } from '@/app/components/VocabListCard';
 import { Pagination } from '@/app/components/Pagination';
+import { speakChinese } from '@/lib/speech';
 
 interface VocabItem {
   lessonId: string; lessonTitle: string;
@@ -18,13 +19,7 @@ const LEVEL_COLOR: Record<string, string> = {
 
 const PAGE_SIZE = 10;
 
-function speak(text: string) {
-  if (typeof window === 'undefined') return;
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'zh-CN'; u.rate = 0.85;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(u);
-}
+const speak = (text: string) => { speakChinese(text); };
 
 export default function VocabLevelPage() {
   const params = useParams();

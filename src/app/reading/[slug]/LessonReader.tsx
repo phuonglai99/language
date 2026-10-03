@@ -3,6 +3,7 @@ import { useState, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import NoteModal from '@/app/components/NoteModal';
 import { ReadingBreadcrumb } from '../ReadingBreadcrumb';
+import { canSpeakChinese, speakChinese } from '@/lib/speech';
 
 type Word = {
   hanzi: string; pinyin: string;
@@ -116,9 +117,21 @@ function WordToken({
           display: 'flex', flexDirection: 'column', gap: 4,
           minWidth: 120,
         }}>
-          {/* Pinyin */}
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: '#93c5fd', fontWeight: 600 }}>
-            {word.pinyin}
+          {/* Pinyin + pronunciation (read only when the button is pressed) */}
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: '#93c5fd', fontWeight: 600 }}>
+              {word.pinyin}
+            </span>
+            {canSpeakChinese() && (
+              <button
+                type="button"
+                aria-label={`Phát âm ${word.hanzi}`}
+                title="Phát âm"
+                onMouseDown={e => { e.stopPropagation(); e.preventDefault(); speakChinese(word.hanzi); }}
+                style={{ padding: '1px 6px', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6, color: 'rgba(255,255,255,0.85)', cursor: 'pointer', fontSize: 12, lineHeight: 1.4, pointerEvents: 'auto' }}>
+                🔊
+              </button>
+            )}
           </span>
           {/* Vietnamese from user's vocab */}
           {vnResult === 'loading' && (

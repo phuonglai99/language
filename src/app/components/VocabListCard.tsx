@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
+import { speakChinese } from '@/lib/speech';
 
 export interface VocabListCardData {
   zh: string;
@@ -21,13 +22,7 @@ interface VocabListCardProps {
   extra?: React.ReactNode;
 }
 
-function defaultSpeak(text: string) {
-  if (typeof window === 'undefined') return;
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'zh-CN'; u.rate = 0.85;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(u);
-}
+const defaultSpeak = (text: string) => { speakChinese(text); };
 
 export function VocabListCard({ item, accent = '#3b82f6', num, href, onClick, onSpeak, extra }: VocabListCardProps) {
   const [hovered, setHovered] = useState(false);
