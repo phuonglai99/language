@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import type { Lesson } from '@/types';
 import { isHskWordList, lessonGrammarHref } from '@/shared/lessons';
+import { siteConfig } from '@/config/site';
 
 type LessonMeta = Omit<Lesson, 'vocab' | 'grammar'> & { vocabCount: number; grammarCount: number };
 
@@ -67,10 +68,10 @@ export default function Home() {
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', gap: 20 }}>
           {/* Logo */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-            <img src="/icon.png" alt="ice-bear" style={{ width: 38, height: 38, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
+            <img src={siteConfig.logo} alt={siteConfig.shortName} style={{ width: 38, height: 38, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
             <div>
-              <div style={{ fontFamily: 'Be Vietnam Pro, sans-serif', fontSize: 15, fontWeight: 700, color: '#fff', lineHeight: 1.1 }}>ice-bear is learning</div>
-              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase' }}>Học tiếng Trung</div>
+              <div style={{ fontFamily: 'Be Vietnam Pro, sans-serif', fontSize: 15, fontWeight: 700, color: '#fff', lineHeight: 1.1 }}>{siteConfig.name}</div>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase' }}>{siteConfig.tagline}</div>
             </div>
           </div>
 

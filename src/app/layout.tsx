@@ -1,18 +1,20 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import GlobalShell from './components/GlobalShell';
+import { siteConfig } from '@/config/site';
 
 export const metadata: Metadata = {
-  title: 'ice-bear is learning',
-  description: 'Học tiếng Trung cùng ice-bear 🐻',
-  icons: { icon: '/icon.png' },
+  // Child pages that set a title get the site name appended: "<title> | <name>".
+  title: { default: siteConfig.name, template: `%s | ${siteConfig.name}` },
+  description: siteConfig.description,
+  icons: { icon: siteConfig.logo },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi">
       <head>
-        <link rel="icon" href="/icon.png" type="image/png" />
+        <link rel="icon" href={siteConfig.logo} type="image/png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="stylesheet"

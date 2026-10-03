@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { GRAMMAR_LEVEL_LABELS, UNLEVELED_LABEL } from '@/shared/grammar';
 import { lessonGrammarHref } from '@/shared/lessons';
+import { siteConfig, siteNameLines } from '@/config/site';
 
 type LessonMeta = {
   id: string; title: string; subtitle?: string; level: string;
@@ -145,7 +146,7 @@ export default function GlobalShell() {
         }}>
           {/* Logo */}
           <button onClick={() => setOpen(true)} title="Mở menu" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-            <img src="/icon.png" alt="ice-bear" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover', display: 'block' }} />
+            <img src={siteConfig.logo} alt={siteConfig.shortName} style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover', display: 'block' }} />
           </button>
           {/* Expand icon */}
           <button
@@ -190,8 +191,8 @@ export default function GlobalShell() {
         <div style={{ padding: '14px 14px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <Link href="/" onClick={closeAll} style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flex: 1 }}>
-              <img src="/icon.png" alt="ice-bear" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
-              <span style={{ fontFamily: 'Be Vietnam Pro, sans-serif', fontSize: 13, fontWeight: 700, color: '#f5f1e8', lineHeight: 1.2 }}>ice-bear is<br /><span style={{ color: 'var(--sidebar-text)', fontWeight: 400 }}>learning</span></span>
+              <img src={siteConfig.logo} alt={siteConfig.shortName} style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
+              <span style={{ fontFamily: 'Be Vietnam Pro, sans-serif', fontSize: 13, fontWeight: 700, color: '#f5f1e8', lineHeight: 1.2 }}>{siteNameLines()[0]}{siteNameLines()[1] && <><br /><span style={{ color: 'var(--sidebar-text)', fontWeight: 400 }}>{siteNameLines()[1]}</span></>}</span>
             </Link>
             {/* Collapse button */}
             <button
