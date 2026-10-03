@@ -337,14 +337,25 @@ export default function LessonPage() {
 
   useEffect(() => {
     const wordParam = searchParams.get('word');
+    const modeParam = searchParams.get('mode');
     fetch(`/api/lessons/${id}`).then(r => r.json()).then(d => {
       const lesson: Lesson = d.lesson;
       setLesson(lesson);
       const vocab: VocabCard[] = lesson?.vocab || [];
       setQueue(vocab);
-      if (wordParam) {
-        const i = vocab.findIndex(v => v.zh === wordParam);
-        if (i >= 0) setIdx(i);
+      // ?word= opens that word: its flashcard, or its page of the list with ?mode=list.
+      // The mode is set here too, so a link followed from another mode on this page still shows it.
+      const i = wordParam ? vocab.findIndex(v => v.zh === wordParam) : -1;
+      if (i < 0) return;
+      setShuffled(false);
+      setFlipped(false);
+      setKanjiChar(null);
+      if (modeParam === 'list') {
+        setMode('list');
+        setListPage(Math.floor(i / LIST_PAGE_SIZE) + 1);
+      } else {
+        setMode('flash');
+        setIdx(i);
       }
     });
   }, [id, searchParams]);

@@ -238,7 +238,7 @@ export default function GlobalShell() {
                 <div style={{ padding: '12px 14px', color: 'rgba(200,191,176,0.5)', fontSize: 12 }}>Không tìm thấy từ nào</div>
               )}
               {!searching && searchResults.map((r, i) => (
-                <Link key={i} href={r.lessonId ? `/lesson/${r.lessonId}` : '#'}
+                <Link key={i} href={r.lessonId ? `/lesson/${r.lessonId}?word=${encodeURIComponent(r.zh)}` : '#'}
                   onClick={e => { if (r.lessonId) closeAll(); else e.preventDefault(); }}
                   aria-disabled={!r.lessonId}
                   style={{ display: 'block', padding: '8px 14px', borderBottom: '1px solid rgba(255,255,255,0.05)', textDecoration: 'none', transition: 'background 0.1s', cursor: r.lessonId ? 'pointer' : 'default' }}
