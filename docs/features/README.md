@@ -1,5 +1,7 @@
 # Logic tính năng — HSK Web
 
+> **Lưu ý (2026-10-03):** các file trong thư mục này mô tả code **trước** DB v4 (`src/lib/db.ts`, các bảng `lessons`/`kanji`/`mb_lessons`…). Kiến trúc hiện tại ở [../ARCHITECTURE.md](../ARCHITECTURE.md) và [../data-layer.md](../data-layer.md). Phần "Vấn đề phát hiện" vẫn hữu ích; tình trạng sửa từng lỗi ghi ở [../migration-plan.md](../migration-plan.md) (P7).
+
 Mỗi file mô tả một tính năng theo cùng một mẫu:
 - Mục đích
 - Màn hình & route

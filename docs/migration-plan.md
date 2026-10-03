@@ -353,6 +353,26 @@ App đang chạy trên VPS (nginx → PM2 → `next start`). File DB được `s
 
 Rollback: xem mục 2.4.
 
+**Kết quả (2026-10-03):**
+
+| Task | Kết quả |
+|---|---|
+| P8.1 | Chốt cutover theo yêu cầu "làm P8" |
+| P8.2 | B2 `lessons-B2-20261003-1201.db`; dump giống hệt B0, tức không có dữ liệu mới phát sinh trong lúc migrate |
+| P8.3 | `npm run migrate:v4` + báo cáo: 27/27 đạt; đã áp dụng migration 1, 2 vào `hsk.db` |
+| P8.4 | `DB_PATH` mặc định đã là `data/hsk.db` (từ P7). Kiểm tra lại 21 route trên bản sao: đạt. **Chưa kiểm tra được trên trình duyệt** (macOS chặn quyền `Desktop`) |
+| P8.5 | Đã xoá `src/lib/db.ts`, `src/lib/lessons.ts`, `src/types/lesson.ts`, trang `/lessons` (đọc JSON, không có link tới), `diffHanzi` và 2 kiểu chỉ nó dùng, thư mục rỗng `api/generate-grammar`. Build đạt |
+| P8.6 | `ARCHITECTURE.md` cập nhật §2–§9; `features/` ghi chú là tài liệu trước v4 |
+| P8.7 | B3 `hsk-B3-20261003-1203.db` |
+| P8.8 | Đã merge `db-v4` vào `main` ở local. **Chưa push, chưa deploy VPS:** bạn chạy các lệnh ở cuối mục này |
+
+Lệnh deploy VPS (bạn chạy):
+1. Ở local: `git push origin main`
+2. Ở local: `scp data/hsk.db <user>@<vps>:<đường dẫn repo>/data/hsk.db`
+3. Trên VPS: `git pull && npm install && npm run build && pm2 restart hsk-web`
+4. Mở thử vài trang trên VPS. Lỗi thì rollback theo §2.4: đặt `DB_PATH=data/lessons.db`, checkout commit `0bcea02` (`main` trước merge), build lại, `pm2 restart hsk-web`.
+
+
 ---
 
 ## P9. Bù dữ liệu thiếu bằng AI — L (làm dần)

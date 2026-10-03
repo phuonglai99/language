@@ -8,14 +8,6 @@ export interface DictationSentence {
   words: string[];
 }
 
-export type CharStatus = 'correct' | 'wrong' | 'missing' | 'extra';
-
-export interface CharResult {
-  char: string;
-  status: CharStatus;
-  expected?: string;
-}
-
 export type WordStatus = 'empty' | 'partial' | 'correct' | 'wrong' | 'extra';
 export type WordKind = 'hanzi' | 'number' | 'latin' | 'mixed';
 
@@ -224,23 +216,4 @@ export function locateSentenceSpans(
     }
   }
   return spans;
-}
-
-export function diffHanzi(userInput: string, correct: string): CharResult[] {
-  const u = cleanHanzi(userInput).split('');
-  const c = cleanHanzi(correct).split('');
-  const results: CharResult[] = [];
-  const maxLen = Math.max(u.length, c.length);
-  for (let i = 0; i < maxLen; i++) {
-    if (i >= u.length) {
-      results.push({ char: c[i], status: 'missing' });
-    } else if (i >= c.length) {
-      results.push({ char: u[i], status: 'extra' });
-    } else if (u[i] === c[i]) {
-      results.push({ char: u[i], status: 'correct' });
-    } else {
-      results.push({ char: u[i], status: 'wrong', expected: c[i] });
-    }
-  }
-  return results;
 }

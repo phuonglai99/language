@@ -36,3 +36,21 @@ Cần làm tay: copy 2 file B0 ra ngoài thư mục repo (ổ ngoài hoặc clou
 | `hsk-B1-20261002-1851.db` | `82d70f745132f9777154abbb42cdb2f3c7c1e2074eb83de3bf46a476d7268c12` | Từ `data/hsk.db` do `npm run migrate:v4` tạo ở commit `940a1bb` |
 
 Kiểm tra: `integrity_check` = ok; SHA-256 của `.dump`: gốc = backup = `f3b94c7c51884ebc4013e588f51d3b3d6c677920a1fbb3ed4999ee01c7f2a9ae`. Báo cáo P6: 22/22 đạt.
+
+## B2 — 2026-10-03 12:01 (đầu cutover P8, bản cuối của DB cũ)
+
+| File | SHA-256 file | Ghi chú |
+|---|---|---|
+| `lessons-B2-20261003-1201.db` | `2824d2d7ea72e029f06dc439ead406ef45ff35f49aec114f555962ec688013ed` | Từ `data/lessons.db` |
+
+Kiểm tra: `integrity_check` = ok; SHA-256 của `.dump` = `3dff6f3e…77e55e`, **giống hệt B0**, tức không có dữ liệu mới phát sinh trong lúc migrate. Số dòng như B0.
+
+Cần làm tay: copy B2 ra ngoài thư mục repo. Giữ tối thiểu 3 tháng sau cutover.
+
+## B3 — 2026-10-03 12:03 (`hsk.db` trước khi đưa lên VPS lần đầu)
+
+| File | SHA-256 file | Ghi chú |
+|---|---|---|
+| `hsk-B3-20261003-1203.db` | `c3f4274baa9976ecb97d87e93917ce6ac44ad82b1feea2452e668c5430a5a5a9` | Từ `data/hsk.db`: `npm run migrate:v4` trên dữ liệu B2, đã áp dụng migration 1, 2 |
+
+Kiểm tra: `integrity_check` = ok; SHA-256 của `.dump` (gốc = backup) = `71b9734b2fed631edb7dd1147bafb3b671eb3e360b42dbc97f46aad78f1cba97`. Báo cáo P6: 27/27 đạt.
