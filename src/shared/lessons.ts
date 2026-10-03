@@ -12,3 +12,17 @@ export function parseLessonId(id: string): LessonRef | null {
   if (hsk) return { kind: 'hsk', level: Number(hsk[1]) };
   return id.trim() ? { kind: 'lesson', id } : null;
 }
+
+/**
+ * Grammar link for a lesson card. HSK word lists have no grammar of their own, so they open
+ * the grammar of their level; an uploaded lesson opens its own grammar, or its level's
+ * grammar when it has none. `level` is the card label ("HSK2").
+ */
+export function lessonGrammarHref(id: string, level: string, grammarCount: number): string {
+  const ref = parseLessonId(id);
+  if (ref?.kind === 'hsk') return `/grammar/hsk/HSK${ref.level}`;
+  if (grammarCount > 0) return `/grammar/${encodeURIComponent(id)}`;
+  return /^HSK[1-6]$/.test(level) ? `/grammar/hsk/${level}` : '/grammar/hsk/HSK1';
+}
+
+export const isHskWordList = (id: string) => parseLessonId(id)?.kind === 'hsk';

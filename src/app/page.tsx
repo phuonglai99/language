@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import type { Lesson } from '@/types';
+import { isHskWordList, lessonGrammarHref } from '@/shared/lessons';
 
 type LessonMeta = Omit<Lesson, 'vocab' | 'grammar'> & { vocabCount: number; grammarCount: number };
 
@@ -164,6 +165,7 @@ export default function Home() {
 
 function LessonCard({ lesson: l, accent, onDelete }: { lesson: LessonMeta; accent: string; onDelete: () => void }) {
   const [hovered, setHovered] = useState(false);
+  const wordList = isHskWordList(l.id);
 
   return (
     <div
@@ -210,9 +212,11 @@ function LessonCard({ lesson: l, accent, onDelete }: { lesson: LessonMeta; accen
           <span style={{ padding: '3px 10px', background: '#f3f4f6', borderRadius: 20, fontSize: 11, color: '#374151', fontFamily: 'JetBrains Mono, monospace' }}>
             <strong>{l.vocabCount}</strong> từ vựng
           </span>
-          <span style={{ padding: '3px 10px', background: '#f3f4f6', borderRadius: 20, fontSize: 11, color: '#374151', fontFamily: 'JetBrains Mono, monospace' }}>
-            <strong>{l.grammarCount}</strong> ngữ pháp
-          </span>
+          {!wordList && (
+            <span style={{ padding: '3px 10px', background: '#f3f4f6', borderRadius: 20, fontSize: 11, color: '#374151', fontFamily: 'JetBrains Mono, monospace' }}>
+              <strong>{l.grammarCount}</strong> ngữ pháp
+            </span>
+          )}
         </div>
       </div>
 
@@ -240,7 +244,7 @@ function LessonCard({ lesson: l, accent, onDelete }: { lesson: LessonMeta; accen
 
       {/* Grammar + Delete */}
       <div style={{ padding: '0 12px 12px', display: 'flex', gap: 6 }}>
-        <Link href={`/grammar/${l.id}`} style={{
+        <Link href={lessonGrammarHref(l.id, l.level, l.grammarCount)} title={wordList ? `Ngữ pháp ${l.level}` : undefined} style={{
           flex: 1, textAlign: 'center', padding: '7px 0',
           border: `1.5px solid ${accent}40`, color: accent,
           borderRadius: 10, fontSize: 11, fontWeight: 600, textDecoration: 'none',
@@ -249,9 +253,10 @@ function LessonCard({ lesson: l, accent, onDelete }: { lesson: LessonMeta; accen
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = accent + '14'; (e.currentTarget as HTMLElement).style.borderColor = accent; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.borderColor = accent + '40'; }}
         >
-          文 Ngữ pháp
+          文 {wordList ? `Ngữ pháp ${l.level}` : 'Ngữ pháp'}
         </Link>
-        <button onClick={onDelete} title="Xoá bài học" style={{
+        {/* HSK word lists come from Excel and cannot be deleted (the API refuses). */}
+        {!wordList && <button onClick={onDelete} title="Xoá bài học" style={{
           width: 34, height: 34, border: '1.5px solid #e5e7eb',
           borderRadius: 10, background: 'transparent', color: '#9ca3af',
           cursor: 'pointer', fontSize: 15, flexShrink: 0, transition: 'all 0.15s',
@@ -259,7 +264,7 @@ function LessonCard({ lesson: l, accent, onDelete }: { lesson: LessonMeta; accen
           onMouseEnter={e => { e.currentTarget.style.color = '#e5484d'; e.currentTarget.style.borderColor = '#fca5a5'; e.currentTarget.style.background = '#fff0f0'; }}
           onMouseLeave={e => { e.currentTarget.style.color = '#9ca3af'; e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.background = 'transparent'; }}>
           ×
-        </button>
+        </button>}
       </div>
     </div>
   );

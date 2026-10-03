@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { GRAMMAR_LEVEL_LABELS, UNLEVELED_LABEL } from '@/shared/grammar';
+import { lessonGrammarHref } from '@/shared/lessons';
 
 type LessonMeta = {
   id: string; title: string; subtitle?: string; level: string;
@@ -34,7 +35,7 @@ const SECTIONS = [
 ];
 
 function lessonHref(section: string, id: string): string {
-  if (section === 'grammar') return `/grammar/${id}`;
+  if (section === 'grammar') return lessonGrammarHref(id, '', 1);
   if (section === 'quiz')    return `/lesson/${id}?mode=quiz`;
   if (section === 'game')    return `/lesson/${id}?mode=match`;
   if (section === 'vocab')   return `/lesson/${id}?mode=list`;
