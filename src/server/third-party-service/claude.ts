@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { Lesson, VocabCard, GrammarPoint } from '@/types';
-import { nanoid } from './nanoid';
-import type { DocxSegments } from './parse-docx';
+import { nanoid } from '@/lib/nanoid';
+import type { DocxSegments } from '@/lib/parse-docx';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 

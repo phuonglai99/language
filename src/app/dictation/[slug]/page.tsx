@@ -1,791 +1,699 @@
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
+
+import HanziZoom from '@/app/components/HanziZoom';
+import { t } from '@/i18n';
+import {
+  isDictationCheckResult, isDictationDisplaySymbol, matchDictationWords, normalizeDictationInput,
+  type DictationCheckResult, type DictationSentence, type DictationToken, type WordSlot,
+} from '@/lib/dictation';
+import {
+  DICTATION_PROGRESS_VERSION, DICTATION_SCORING_VERSION, dictationContentSignature, dictationProgressKey,
+  readDictationProgress, removeDictationProgress, writeDictationProgress,
+  type DictationDifficulty, type DictationProgressV1, type WordHintMode,
+} from '@/lib/dictationProgress';
+import { shouldIgnorePageShortcut } from '@/lib/keyboard';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { matchDictationWords, type WordSlot } from '@/lib/dictation';
-import { t } from '@/i18n';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
-type DictationSentence = {
-  index: number; hanzi: string; pinyin: string; wordCount: number; words: string[];
-  start: number | null; end: number | null;
-};
 type Lesson = {
-  slug: string; title_en: string; title_zh_simplified: string;
-  hsk_level: number; categories: string[]; audio_url: string | null;
+  slug: string;
+  title_en: string;
+  title_zh_simplified: string;
+  hsk_level: number;
+  categories: string[];
+  audio_url: string | null;
   vocabCount?: number;
 };
-type CheckResult = { result: WordSlot[]; correct_hanzi: string; pinyin: string; is_perfect: boolean };
-
-const LEVEL_COLOR: Record<number, string> = {
-  1: '#3a8a5c', 2: '#4a72a0', 3: '#a0720a', 4: '#c8392b', 5: '#7a3db0',
+type Sentence = DictationSentence & { start: number | null; end: number | null };
+type Submission = { input: string; result: DictationCheckResult };
+type ActiveAudioClip = { sentenceIndex: number; start: number; end: number };
+type StudyState = {
+  currentSentenceIndex: number;
+  drafts: Record<string, string>;
+  submissions: Record<string, Submission>;
+  hintUsed: Record<string, boolean>;
+  wordHintsUsed: Record<string, Record<string, { hanzi: boolean; pinyin: boolean }>>;
+  playbackRate: 0.75 | 1;
+  difficulty: DictationDifficulty;
+  wordHintMode: WordHintMode;
 };
-type AlignmentStatus = 'Checked' | 'Uncheck';
 
-function getAlignmentStatus(categories: string[]): AlignmentStatus | null {
+const LEVEL_COLOR: Record<number, string> = { 1: '#3a8a5c', 2: '#4a72a0', 3: '#a0720a', 4: '#c8392b', 5: '#7a3db0' };
+const SLOT_COLOR: Record<WordSlot['status'], string> = { empty: 'var(--ash)', partial: 'var(--ink)', correct: '#16a34a', wrong: '#dc2626', extra: '#dc2626' };
+const subscribeSpeechSupport = () => () => {};
+const getSpeechSupport = () => 'speechSynthesis' in window;
+
+function blankStudy(keep?: Pick<StudyState, 'playbackRate' | 'difficulty' | 'wordHintMode'>): StudyState {
+  return {
+    currentSentenceIndex: 0, drafts: {}, submissions: {}, hintUsed: {}, wordHintsUsed: {},
+    playbackRate: keep?.playbackRate ?? 1,
+    difficulty: keep?.difficulty ?? 'normal',
+    wordHintMode: keep?.wordHintMode ?? 'pinyin',
+  };
+}
+
+function getAlignmentStatus(categories: string[]): 'Checked' | 'Uncheck' | null {
   if (categories.includes('Uncheck')) return 'Uncheck';
   if (categories.includes('Checked')) return 'Checked';
   return null;
 }
 
-function AlignmentStatusBadge({ status }: { status: AlignmentStatus }) {
-  const isChecked = status === 'Checked';
+function hasAlignedAudio(sentence?: Sentence): boolean {
+  return sentence?.start != null && sentence.end != null;
+}
+
+function wordKey(sentenceIndex: number): string {
+  return String(sentenceIndex);
+}
+
+function restoreStudy(progress: DictationProgressV1, sentences: Sentence[]): StudyState {
+  const validIndexes = new Set(sentences.map(sentence => wordKey(sentence.index)));
+  const study = blankStudy({
+    playbackRate: progress.playbackRate,
+    difficulty: progress.difficulty,
+    wordHintMode: progress.wordHintMode,
+  });
+  study.currentSentenceIndex = validIndexes.has(wordKey(progress.currentSentenceIndex)) ? progress.currentSentenceIndex : sentences[0]?.index ?? 0;
+  for (const [index, saved] of Object.entries(progress.sentences)) {
+    if (!validIndexes.has(index)) continue;
+    if (saved.draft) study.drafts[index] = saved.draft;
+    if (saved.hintUsed) study.hintUsed[index] = true;
+    if (Object.keys(saved.wordHintsUsed).length) study.wordHintsUsed[index] = saved.wordHintsUsed;
+    if (saved.submission && progress.scoringVersion === DICTATION_SCORING_VERSION) study.submissions[index] = saved.submission;
+  }
+  return study;
+}
+
+function toProgress(slug: string, contentSignature: string, study: StudyState): DictationProgressV1 {
+  const indexes = new Set([
+    ...Object.keys(study.drafts), ...Object.keys(study.submissions), ...Object.keys(study.hintUsed), ...Object.keys(study.wordHintsUsed),
+  ]);
+  const sentences: DictationProgressV1['sentences'] = {};
+  for (const index of indexes) {
+    sentences[index] = {
+      draft: study.drafts[index] ?? '',
+      hintUsed: study.hintUsed[index] === true,
+      wordHintsUsed: study.wordHintsUsed[index] ?? {},
+      ...(study.submissions[index] ? { submission: study.submissions[index] } : {}),
+    };
+  }
+  return {
+    version: DICTATION_PROGRESS_VERSION, slug, updatedAt: Date.now(), contentSignature,
+    scoringVersion: DICTATION_SCORING_VERSION, currentSentenceIndex: study.currentSentenceIndex,
+    playbackRate: study.playbackRate, difficulty: study.difficulty, wordHintMode: study.wordHintMode, sentences,
+  };
+}
+
+function SlotText({ slot }: { slot: WordSlot }) {
+  const raw = slot.text ?? slot.expected;
+  let typedAt = 0;
   return (
-    <span style={{
-      display: 'inline-block', padding: '2px 8px', borderRadius: 20,
-      background: isChecked ? 'rgba(22,163,74,0.18)' : 'rgba(200,57,43,0.18)',
-      border: `1px solid ${isChecked ? 'rgba(22,163,74,0.4)' : 'rgba(200,57,43,0.4)'}`,
-      color: isChecked ? '#86efac' : '#fecaca',
-      fontSize: 9.5, fontWeight: 700,
-      fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em',
-      flexShrink: 0,
-    }}>
-      {t.common.alignmentStatus[status]}
-    </span>
+    <>
+      {[...raw].map((char, index) => {
+        if (isDictationDisplaySymbol(char)) return <span key={index} style={{ color: 'var(--ash)', letterSpacing: 0 }}>{char}</span>;
+        const typed = slot.typed[typedAt++];
+        const digit = /^[0-9０-９]$/.test(char);
+        return <span key={index} style={{ color: typed ? SLOT_COLOR[slot.status] : digit ? '#dc2626' : SLOT_COLOR[slot.status] }}>{typed ?? '*'}</span>;
+      })}
+    </>
   );
 }
-const SLOT_COLOR: Record<WordSlot['status'], string> = {
-  empty: 'var(--ash)',
-  partial: 'var(--ink)',
-  correct: '#16a34a',
-  wrong: '#dc2626',
-  extra: '#dc2626',
-};
 
 function WordBlanks({
-  slots,
-  showExpectedOnWrong = false,
-  activeIndex = -1,
+  tokens, slots, activeIndex, wordHints, openHintId, showAllPinyin, onToggleHint, onRevealHint,
 }: {
+  tokens: DictationToken[];
   slots: WordSlot[];
-  showExpectedOnWrong?: boolean;
-  activeIndex?: number;
+  activeIndex: number;
+  wordHints: Record<string, { hanzi: boolean; pinyin: boolean }>;
+  openHintId: string | null;
+  showAllPinyin: boolean;
+  onToggleHint: (token: DictationToken) => void;
+  onRevealHint: (token: DictationToken, mode: WordHintMode) => void;
 }) {
+  let slotIndex = 0;
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, rowGap: 16, alignItems: 'flex-end' }}>
-      {slots.map((slot, i) => {
-        const isActive = i === activeIndex;
-        const stars = '*'.repeat(Math.max(slot.expected.length, 1));
-        const display = slot.status === 'empty'
-          ? stars
-          : slot.status === 'partial'
-            ? slot.typed + '*'.repeat(Math.max(slot.expected.length - slot.typed.length, 0))
-            : slot.typed || stars;
-        const hintVisible = !!(slot.showHint && slot.expected && (slot.status !== 'empty' || isActive));
-        const hint = hintVisible
-          ? slot.expected
-          : showExpectedOnWrong && slot.status === 'wrong' && slot.expected && slot.typed.length >= slot.expected.length
-            ? slot.expected
-            : null;
-        return (
-          <div key={i} style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-            minWidth: Math.max(slot.expected.length, slot.typed.length, 1) * 14 + 8,
-          }}>
-            {hint ? (
-              <span style={{
-                fontSize: 10, fontFamily: 'JetBrains Mono, monospace', color: '#a0720a',
-                lineHeight: 1, fontWeight: 700, letterSpacing: '0.04em',
-              }}>
-                {hint}
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+      <div aria-hidden="true" style={{ flexShrink: 0, width: 48, paddingTop: 1, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+        <div style={{ height: 24, display: 'flex', alignItems: 'center' }}>{t.dictation.practice.pinyinRow}</div>
+        <div style={{ height: 34, display: 'flex', alignItems: 'center' }}>{t.dictation.practice.hanziRow}</div>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, rowGap: 18, alignItems: 'flex-start', minWidth: 0 }}>
+        {tokens.map(token => {
+          if (!token.scorable) return <div key={token.id} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}><span style={{ height: 24 }} /><span style={{ height: 34, display: 'flex', alignItems: 'center', color: 'var(--ash)', fontSize: 20, fontFamily: 'Noto Serif SC, serif' }}>{token.text}</span></div>;
+          const slot = slots[slotIndex];
+          const index = slotIndex++;
+          if (!slot) return null;
+          const hints = wordHints[token.id] ?? { hanzi: false, pinyin: false };
+          const correct = slot.status === 'correct';
+          const showPinyin = correct || showAllPinyin || hints.pinyin;
+          const showHanzi = correct || hints.hanzi;
+          const canRevealPinyin = !!token.pinyin && !showAllPinyin && !hints.pinyin;
+          const canRevealHanzi = !hints.hanzi;
+          const canOpen = !correct && (canRevealPinyin || canRevealHanzi);
+          const open = openHintId === token.id;
+          const width = Math.max([...token.text].length * 18 + 12, token.pinyin.length * 7 + 12, 42);
+          return (
+            <div key={token.id} data-word-hint-popup style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: width }}>
+              <span style={{ height: 24, maxWidth: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: showPinyin ? '#a0720a' : 'transparent', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                {showPinyin ? token.pinyin || '—' : '•'}
               </span>
-            ) : (
-              <span style={{ height: 10 }} />
-            )}
-            <span style={{
-              display: 'inline-flex', justifyContent: 'center',
-              minWidth: Math.max(slot.expected.length, 1) * 16 + 8,
-              padding: '2px 4px 1px',
-              borderBottom: `2px solid ${isActive ? '#a0720a' : SLOT_COLOR[slot.status]}`,
-              background: isActive ? 'rgba(160,114,10,0.06)' : 'transparent',
-              fontFamily: 'Noto Serif SC, JetBrains Mono, serif',
-              fontSize: 20, letterSpacing: '0.12em',
-              color: SLOT_COLOR[slot.status], lineHeight: 1.3,
-            }}>
-              {display}
-            </span>
-          </div>
-        );
-      })}
+              <button type="button" onClick={() => canOpen && onToggleHint(token)} disabled={!canOpen}
+                aria-label={canOpen ? t.dictation.practice.openWordHint(index + 1) : undefined} aria-expanded={canOpen ? open : undefined}
+                style={{
+                  height: 34, minWidth: width, padding: '2px 6px 1px', border: 0,
+                  borderBottom: `2px solid ${index === activeIndex ? '#a0720a' : SLOT_COLOR[slot.status]}`,
+                  borderRadius: '5px 5px 0 0', background: index === activeIndex ? 'rgba(160,114,10,0.07)' : 'transparent',
+                  color: SLOT_COLOR[slot.status], cursor: canOpen ? 'pointer' : 'default',
+                  fontFamily: 'Noto Serif SC, JetBrains Mono, serif', fontSize: 20, letterSpacing: showHanzi ? '0.04em' : '0.12em', lineHeight: 1.3,
+                }}>
+                {showHanzi ? token.text : <SlotText slot={slot} />}
+              </button>
+              {open && <div role="dialog" aria-label={t.dictation.practice.wordHintPopupTitle} style={{
+                position: 'absolute', zIndex: 20, top: 64, left: '50%', transform: 'translateX(-50%)', width: 176,
+                padding: 10, border: '1px solid var(--border)', borderRadius: 9, background: 'var(--card-bg)', boxShadow: '0 10px 28px rgba(0,0,0,0.18)',
+              }}>
+                <div style={{ marginBottom: 8, color: 'var(--ash)', fontSize: 11, fontWeight: 600 }}>{t.dictation.practice.wordHintPopupTitle}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                  <button type="button" disabled={!canRevealPinyin} onClick={() => onRevealHint(token, 'pinyin')} style={{ padding: '7px 6px', border: '1px solid var(--border)', borderRadius: 6, background: !canRevealPinyin ? 'var(--paper-alt)' : 'transparent', color: !token.pinyin ? 'var(--ash-light)' : 'var(--ink)', cursor: canRevealPinyin ? 'pointer' : 'default' }}>{t.dictation.practice.wordHintModes.pinyin}</button>
+                  <button type="button" disabled={!canRevealHanzi} onClick={() => onRevealHint(token, 'hanzi')} style={{ padding: '7px 6px', border: '1px solid var(--border)', borderRadius: 6, background: !canRevealHanzi ? 'var(--paper-alt)' : 'transparent', color: 'var(--ink)', cursor: canRevealHanzi ? 'pointer' : 'default' }}>{t.dictation.practice.wordHintModes.hanzi}</button>
+                </div>
+                {!token.pinyin && <div style={{ marginTop: 7, color: '#dc2626', fontSize: 10 }}>{t.dictation.practice.pinyinUnavailable}</div>}
+              </div>}
+            </div>
+          );
+        })}
+        {slots.filter(slot => slot.status === 'extra').map((slot, index) => (
+          <div key={`extra-${index}`} style={{ display: 'flex', flexDirection: 'column' }}><span style={{ height: 24 }} /><span style={{ height: 34, display: 'flex', alignItems: 'center', color: SLOT_COLOR.extra, borderBottom: '2px solid #dc2626', fontFamily: 'Noto Serif SC, serif', fontSize: 20 }}>{slot.typed}</span></div>
+        ))}
+      </div>
     </div>
   );
 }
 
 function ScoreBar({ pct }: { pct: number }) {
   const color = pct >= 90 ? '#16a34a' : pct >= 60 ? '#a0720a' : '#dc2626';
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 0.4s ease' }} />
-      </div>
-      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color, minWidth: 32, textAlign: 'right' }}>
-        {pct}%
-      </span>
-    </div>
-  );
+  return <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 110 }}>
+    <div style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}><div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 3 }} /></div>
+    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color }}>{pct}%</span>
+  </div>;
 }
-
 
 export default function DictationExercisePage() {
   const { slug } = useParams<{ slug: string }>();
+  return <DictationSession key={slug} slug={slug} />;
+}
+
+function DictationSession({ slug }: { slug: string }) {
   const [lesson, setLesson] = useState<Lesson | null>(null);
-  const [sentences, setSentences] = useState<DictationSentence[]>([]);
+  const [sentences, setSentences] = useState<Sentence[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [userInput, setUserInput] = useState('');
-  const [isChecking, setIsChecking] = useState(false);
-  const [results, setResults] = useState<Record<number, CheckResult>>({});
+  const [study, setStudy] = useState<StudyState>(() => blankStudy());
+  const studyRef = useRef(study);
+  const dataRef = useRef<{ slug: string; signature: string; sentences: Sentence[] } | null>(null);
+  const [persistenceReady, setPersistenceReady] = useState(false);
+  const persistenceActiveRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionRef = useRef(0);
+  const controllersRef = useRef(new Set<AbortController>());
+  const [notice, setNotice] = useState<string | null>(null);
+  const [storageConflict, setStorageConflict] = useState(false);
+  const [checkingIndex, setCheckingIndex] = useState<number | null>(null);
   const [showHint, setShowHint] = useState(false);
-  const [hintUsed, setHintUsed] = useState<Record<number, boolean>>({});
-  const [playbackRate, setPlaybackRate] = useState(1);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [difficulty, setDifficulty] = useState<'easy' | 'normal' | 'hard'>('normal');
-  const [ttsSupported, setTtsSupported] = useState(false);
+  const [openWordHintId, setOpenWordHintId] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   const [inputBeforeIme, setInputBeforeIme] = useState('');
-
+  const [compositionText, setCompositionText] = useState('');
+  const ttsSupported = useSyncExternalStore(subscribeSpeechSupport, getSpeechSupport, () => false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const rightPanelRef = useRef<HTMLDivElement>(null);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const stopHandlerRef = useRef<(() => void) | null>(null);
+  const activeAudioClipRef = useRef<ActiveAudioClip | null>(null);
 
-  const hasAlignedAudio = (s?: DictationSentence) =>
-    s != null && s.start != null && s.end != null;
+  const replaceStudy = useCallback((next: StudyState) => {
+    studyRef.current = next;
+    setStudy(next);
+  }, []);
+  const updateStudy = useCallback((recipe: (previous: StudyState) => StudyState) => {
+    const next = recipe(studyRef.current);
+    studyRef.current = next;
+    setStudy(next);
+  }, []);
+  const cancelPendingSave = useCallback(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = null;
+  }, []);
+  const persistNow = useCallback(() => {
+    cancelPendingSave();
+    const data = dataRef.current;
+    if (!persistenceActiveRef.current || !data) return;
+    if (!writeDictationProgress(toProgress(data.slug, data.signature, studyRef.current))) {
+      persistenceActiveRef.current = false;
+      setNotice(t.dictation.practice.storageUnavailable);
+    }
+  }, [cancelPendingSave]);
+  const schedulePersist = useCallback(() => {
+    cancelPendingSave();
+    if (!persistenceActiveRef.current || !dataRef.current) return;
+    saveTimerRef.current = setTimeout(persistNow, 500);
+  }, [cancelPendingSave, persistNow]);
 
-  const clearAudioStop = () => {
+  const clearAudioStop = useCallback(() => {
     const audio = audioRef.current;
     if (audio && stopHandlerRef.current) {
       audio.removeEventListener('timeupdate', stopHandlerRef.current);
       stopHandlerRef.current = null;
     }
-  };
-
-  useEffect(() => {
-    setTtsSupported(typeof window !== 'undefined' && 'speechSynthesis' in window);
-    return () => {
-      window.speechSynthesis?.cancel();
-      const audio = audioRef.current;
-      if (audio && stopHandlerRef.current) {
-        audio.removeEventListener('timeupdate', stopHandlerRef.current);
-        stopHandlerRef.current = null;
-      }
-    };
   }, []);
 
   useEffect(() => {
-    fetch(`/api/dictation/lessons/${slug}`)
-      .then(r => { if (!r.ok) throw new Error('not found'); return r.json(); })
-      .then(d => { setLesson(d.lesson); setSentences(d.sentences); setLoading(false); })
-      .catch(() => { setNotFound(true); setLoading(false); });
-  }, [slug]);
+    if (persistenceReady) schedulePersist();
+  }, [study, persistenceReady, schedulePersist]);
 
   useEffect(() => {
-    if (audioRef.current) audioRef.current.playbackRate = playbackRate;
-  }, [playbackRate]);
+    const onLifecycle = () => persistNow();
+    const onVisibility = () => { if (document.visibilityState === 'hidden') persistNow(); };
+    window.addEventListener('pagehide', onLifecycle);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', onLifecycle);
+      document.removeEventListener('visibilitychange', onVisibility);
+      persistNow();
+    };
+  }, [persistNow]);
 
   useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== dictationProgressKey(slug) || !persistenceActiveRef.current) return;
+      persistenceActiveRef.current = false;
+      sessionRef.current++;
+      cancelPendingSave();
+      controllersRef.current.forEach(controller => controller.abort());
+      setStorageConflict(true);
+      setNotice(t.dictation.practice.storageConflict);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [slug, cancelPendingSave]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    sessionRef.current++;
+    fetch(`/api/dictation/lessons/${encodeURIComponent(slug)}`, { signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) throw new Error('not-found');
+        return response.json() as Promise<{ lesson: Lesson; sentences: Sentence[] }>;
+      })
+      .then(data => {
+        if (controller.signal.aborted) return;
+        const signature = dictationContentSignature(data.sentences);
+        dataRef.current = { slug, signature, sentences: data.sentences };
+        const saved = readDictationProgress(slug);
+        let next = blankStudy();
+        let message: string | null = null;
+        if (saved?.contentSignature === signature) {
+          next = restoreStudy(saved, data.sentences);
+          message = saved.scoringVersion === DICTATION_SCORING_VERSION
+            ? t.dictation.practice.progressRestored
+            : t.dictation.practice.scoringChanged;
+        } else if (saved) {
+          next = blankStudy({ playbackRate: saved.playbackRate, difficulty: saved.difficulty, wordHintMode: saved.wordHintMode });
+          removeDictationProgress(slug);
+          message = t.dictation.practice.contentChanged;
+        }
+        replaceStudy(next);
+        setLesson(data.lesson);
+        setSentences(data.sentences);
+        setNotice(message);
+        setLoading(false);
+        persistenceActiveRef.current = true;
+        setPersistenceReady(true);
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setNotFound(true);
+        setLoading(false);
+      });
+    return () => controller.abort();
+  }, [slug, persistNow, replaceStudy]);
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.playbackRate = study.playbackRate;
+  }, [study.playbackRate]);
+  useEffect(() => () => {
     window.speechSynthesis?.cancel();
     clearAudioStop();
-    if (audioRef.current && !audioRef.current.paused) audioRef.current.pause();
-    setIsPlaying(false);
-    setUserInput('');
+    activeAudioClipRef.current = null;
+    controllersRef.current.forEach(controller => controller.abort());
+  }, [clearAudioStop]);
+  useEffect(() => {
+    const position = sentences.findIndex(sentence => sentence.index === study.currentSentenceIndex);
+    const element = rightPanelRef.current?.querySelector(`[data-sentence="${position}"]`);
+    element?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [sentences, study.currentSentenceIndex]);
+
+  const currentPosition = Math.max(0, sentences.findIndex(sentence => sentence.index === study.currentSentenceIndex));
+  const currentSentence = sentences[currentPosition];
+  const currentKey = currentSentence ? wordKey(currentSentence.index) : '';
+  const userInput = study.drafts[currentKey] ?? '';
+  const currentSubmission = study.submissions[currentKey];
+  const currentResult = currentSubmission?.result;
+  const levelColor = LEVEL_COLOR[lesson?.hsk_level ?? 0] ?? 'var(--ash)';
+
+  const changeSentence = useCallback((position: number) => {
+    const sentence = sentences[position];
+    if (!sentence || sentence.index === studyRef.current.currentSentenceIndex) return;
+    window.speechSynthesis?.cancel();
+    clearAudioStop();
+    activeAudioClipRef.current = null;
+    audioRef.current?.pause();
     setShowHint(false);
+    setOpenWordHintId(null);
     setComposing(false);
     setInputBeforeIme('');
-    textareaRef.current?.focus();
-  }, [currentIndex]);
+    setCompositionText('');
+    updateStudy(previous => ({ ...previous, currentSentenceIndex: sentence.index }));
+    persistNow();
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }, [sentences, clearAudioStop, updateStudy, persistNow]);
 
-  const totalAnswered = Object.keys(results).length;
-  const totalCorrect = Object.values(results).filter(r => r.is_perfect).length;
-  const scorePercent = sentences.length
-    ? Math.round((Object.values(results).reduce((acc, r) => {
-        const words = r.result.filter(s => s.status !== 'extra');
-        const correct = words.filter(s => s.status === 'correct').length;
-        return acc + (words.length > 0 ? correct / words.length : 0);
-      }, 0) / sentences.length) * 100)
-    : 0;
+  const setHintUsed = useCallback((sentenceIndex: number) => {
+    const key = wordKey(sentenceIndex);
+    updateStudy(previous => ({ ...previous, hintUsed: { ...previous.hintUsed, [key]: true } }));
+  }, [updateStudy]);
 
   const checkAnswer = useCallback(async () => {
-    if (!userInput.trim() || isChecking) return;
-    setIsChecking(true);
+    const sentence = currentSentence;
+    const input = userInput;
+    if (!sentence || !input.trim() || checkingIndex != null) return;
+    const requestSession = sessionRef.current;
+    const controller = new AbortController();
+    controllersRef.current.add(controller);
+    setCheckingIndex(sentence.index);
     try {
-      const res = await fetch('/api/dictation/check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, sentence_index: sentences[currentIndex]?.index, user_input: userInput }),
+      const response = await fetch('/api/dictation/check', {
+        method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, sentence_index: sentence.index, user_input: input }),
       });
-      const data = await res.json() as CheckResult;
-      setResults(prev => ({ ...prev, [currentIndex]: data }));
+      const data: unknown = await response.json();
+      if (!response.ok || !isDictationCheckResult(data)) throw new Error('invalid-check-result');
+      if (controller.signal.aborted || requestSession !== sessionRef.current || dataRef.current?.slug !== slug) return;
+      updateStudy(previous => ({
+        ...previous,
+        submissions: { ...previous.submissions, [wordKey(sentence.index)]: { input, result: data } },
+      }));
+      persistNow();
+    } catch {
+      if (!controller.signal.aborted) setNotice(t.dictation.practice.checkFailed);
     } finally {
-      setIsChecking(false);
+      controllersRef.current.delete(controller);
+      if (!controller.signal.aborted && requestSession === sessionRef.current) setCheckingIndex(previous => previous === sentence.index ? null : previous);
     }
-  }, [userInput, isChecking, slug, sentences, currentIndex]);
+  }, [checkingIndex, currentSentence, userInput, slug, updateStudy, persistNow]);
 
-  const speakSentence = useCallback((hanzi: string, rate = 1) => {
+  const speakSentence = useCallback((hanzi: string, rate: number) => {
     if (!ttsSupported) return;
     window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(hanzi);
-    utter.lang = 'zh-CN';
-    utter.rate = rate * 0.85; // SpeechSynthesis rate ≈ slightly slower than normal speech
-    utter.onstart = () => setIsPlaying(true);
-    utter.onend = () => setIsPlaying(false);
-    utter.onerror = () => setIsPlaying(false);
-    utteranceRef.current = utter;
-    window.speechSynthesis.speak(utter);
+    const utterance = new SpeechSynthesisUtterance(hanzi);
+    utterance.lang = 'zh-CN';
+    utterance.rate = rate * 0.85;
+    utterance.onstart = () => undefined;
+    window.speechSynthesis.speak(utterance);
   }, [ttsSupported]);
-
-  const playSentence = useCallback((start: number, end: number) => {
+  const playSentence = useCallback((sentenceIndex: number, start: number, end: number) => {
     const audio = audioRef.current;
     if (!audio) return;
     clearAudioStop();
     window.speechSynthesis?.cancel();
-
-    const stopAt = end + 0.15;
+    activeAudioClipRef.current = { sentenceIndex, start, end };
     const stop = () => {
-      if (audio.currentTime >= stopAt) {
+      if (audio.currentTime >= end + 0.15) {
         audio.pause();
-        audio.removeEventListener('timeupdate', stop);
-        stopHandlerRef.current = null;
-        setIsPlaying(false);
+        clearAudioStop();
+        activeAudioClipRef.current = null;
       }
     };
     stopHandlerRef.current = stop;
     audio.addEventListener('timeupdate', stop);
-
-    const startPlay = () => {
+    const begin = () => {
       audio.currentTime = start;
-      audio.playbackRate = playbackRate;
-      audio.play()
-        .then(() => setIsPlaying(true))
-        .catch(() => setIsPlaying(false));
+      audio.playbackRate = studyRef.current.playbackRate;
+      void audio.play().catch(() => undefined);
     };
-
-    if (audio.readyState >= 1) {
-      startPlay();
-    } else {
-      const onReady = () => {
-        audio.removeEventListener('loadedmetadata', onReady);
-        startPlay();
-      };
-      audio.addEventListener('loadedmetadata', onReady);
+    if (audio.readyState >= 1) begin();
+    else {
+      const ready = () => { audio.removeEventListener('loadedmetadata', ready); begin(); };
+      audio.addEventListener('loadedmetadata', ready);
       audio.load();
     }
-  }, [playbackRate]);
-
+  }, [clearAudioStop]);
   const replayAudio = useCallback(() => {
-    const s = sentences[currentIndex];
-    if (hasAlignedAudio(s)) {
-      playSentence(s.start as number, s.end as number);
-    } else if (s?.hanzi) {
-      speakSentence(s.hanzi, playbackRate);
-    } else if (audioRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play();
-    }
-  }, [sentences, currentIndex, playSentence, speakSentence, playbackRate]);
-
+    if (!currentSentence) return;
+    if (hasAlignedAudio(currentSentence)) playSentence(currentSentence.index, currentSentence.start as number, currentSentence.end as number);
+    else if (currentSentence.hanzi) speakSentence(currentSentence.hanzi, studyRef.current.playbackRate);
+  }, [currentSentence, playSentence, speakSentence]);
   const togglePlay = useCallback(() => {
-    const s = sentences[currentIndex];
-    if (hasAlignedAudio(s)) {
-      if (isPlaying) {
-        clearAudioStop();
-        audioRef.current?.pause();
-        setIsPlaying(false);
-      } else {
-        playSentence(s.start as number, s.end as number);
-      }
-    } else if (s?.hanzi) {
-      if (isPlaying) {
-        window.speechSynthesis.cancel();
-        setIsPlaying(false);
-      } else {
-        speakSentence(s.hanzi, playbackRate);
-      }
-    } else if (audioRef.current) {
-      if (audioRef.current.paused) { audioRef.current.play(); }
-      else { audioRef.current.pause(); }
-    }
-  }, [sentences, currentIndex, isPlaying, playSentence, speakSentence, playbackRate]);
+    if (!currentSentence) return;
+    const audio = audioRef.current;
+    if (hasAlignedAudio(currentSentence)) {
+      const activeClip = activeAudioClipRef.current;
+      const canResume = audio?.paused
+        && activeClip?.sentenceIndex === currentSentence.index
+        && audio.currentTime >= activeClip.start
+        && audio.currentTime < activeClip.end + 0.15;
+      if (audio && !audio.paused) audio.pause();
+      else if (audio && canResume) {
+        audio.playbackRate = studyRef.current.playbackRate;
+        void audio.play().catch(() => undefined);
+      } else playSentence(currentSentence.index, currentSentence.start as number, currentSentence.end as number);
+    } else if (currentSentence.hanzi) speakSentence(currentSentence.hanzi, studyRef.current.playbackRate);
+  }, [currentSentence, playSentence, speakSentence]);
+
+  const resetSentence = useCallback(() => {
+    if (!currentSentence) return;
+    const key = wordKey(currentSentence.index);
+    updateStudy(previous => {
+      const drafts = { ...previous.drafts }; delete drafts[key];
+      const submissions = { ...previous.submissions }; delete submissions[key];
+      return { ...previous, drafts, submissions };
+    });
+    persistNow();
+  }, [currentSentence, updateStudy, persistNow]);
+  const resetLesson = useCallback(() => {
+    if (!window.confirm(t.dictation.practice.resetLessonConfirm)) return;
+    sessionRef.current++;
+    controllersRef.current.forEach(controller => controller.abort());
+    setCheckingIndex(null);
+    removeDictationProgress(slug);
+    replaceStudy(blankStudy(studyRef.current));
+    setShowHint(false);
+    setOpenWordHintId(null);
+    setNotice(null);
+    persistNow();
+  }, [slug, replaceStudy, persistNow]);
+
+  const toggleSentenceHint = useCallback(() => {
+    if (!currentSentence) return;
+    setShowHint(previous => {
+      if (!previous) setHintUsed(currentSentence.index);
+      return !previous;
+    });
+    persistNow();
+  }, [currentSentence, setHintUsed, persistNow]);
+  const toggleWordHint = useCallback((token: DictationToken) => {
+    setOpenWordHintId(previous => previous === token.id ? null : token.id);
+  }, []);
+  const revealWordHint = useCallback((token: DictationToken, mode: WordHintMode) => {
+    if (!currentSentence) return;
+    if (mode === 'pinyin' && !token.pinyin) { setNotice(t.dictation.practice.pinyinUnavailable); return; }
+    const key = wordKey(currentSentence.index);
+    updateStudy(previous => ({
+      ...previous,
+      wordHintMode: mode,
+      hintUsed: { ...previous.hintUsed, [key]: true },
+      wordHintsUsed: {
+        ...previous.wordHintsUsed,
+        [key]: { ...previous.wordHintsUsed[key], [token.id]: { hanzi: previous.wordHintsUsed[key]?.[token.id]?.hanzi ?? false, pinyin: previous.wordHintsUsed[key]?.[token.id]?.pinyin ?? false, [mode]: true } },
+      },
+    }));
+    setOpenWordHintId(null);
+    persistNow();
+  }, [currentSentence, updateStudy, persistNow]);
 
   useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      // Don't intercept when focus is inside the textarea
-      const tag = (e.target as HTMLElement).tagName;
-      const inTextarea = tag === 'TEXTAREA' || tag === 'INPUT';
+    if (!openWordHintId) return;
+    const close = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('[data-word-hint-popup]')) return;
+      setOpenWordHintId(null);
+    };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpenWordHintId(null); };
+    window.addEventListener('pointerdown', close);
+    window.addEventListener('keydown', escape);
+    return () => { window.removeEventListener('pointerdown', close); window.removeEventListener('keydown', escape); };
+  }, [openWordHintId]);
 
-      if (e.key === ' ' && !inTextarea) {
-        e.preventDefault();
-        togglePlay();
-      } else if (e.key === 'Tab') {
-        e.preventDefault();
-        replayAudio();
-      } else if (e.key === 'Enter' && !inTextarea) {
-        e.preventDefault();
-        checkAnswer();
-      } else if (e.key === 'h' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        setShowHint(h => {
-          if (!h) setHintUsed(prev => ({ ...prev, [currentIndex]: true }));
-          return !h;
-        });
-      } else if (e.key === 'ArrowRight' && !inTextarea) {
-        e.preventDefault();
-        setCurrentIndex(i => Math.min(i + 1, sentences.length - 1));
-      } else if (e.key === 'ArrowLeft' && !inTextarea) {
-        e.preventDefault();
-        setCurrentIndex(i => Math.max(i - 1, 0));
-      }
-    }
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (shouldIgnorePageShortcut(event) || event.altKey) return;
+      if ((event.ctrlKey || event.metaKey) && event.key !== 'h') return;
+      if (event.key === ' ') { event.preventDefault(); togglePlay(); }
+      else if (event.key === 'Tab') { event.preventDefault(); replayAudio(); }
+      else if (event.key === 'Enter') { event.preventDefault(); void checkAnswer(); }
+      else if (event.key === 'h' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); toggleSentenceHint(); }
+      else if (event.key === 'ArrowRight') { event.preventDefault(); changeSentence(Math.min(currentPosition + 1, sentences.length - 1)); }
+      else if (event.key === 'ArrowLeft') { event.preventDefault(); changeSentence(Math.max(currentPosition - 1, 0)); }
+    };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [togglePlay, replayAudio, checkAnswer, currentIndex, sentences.length]);
+  }, [togglePlay, replayAudio, checkAnswer, toggleSentenceHint, changeSentence, currentPosition, sentences.length]);
 
-  // Scroll active sentence card into view in right panel
-  useEffect(() => {
-    const el = rightPanelRef.current?.querySelector(`[data-sentence="${currentIndex}"]`);
-    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, [currentIndex]);
+  if (loading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--paper)', color: 'var(--ash)' }}>{t.common.loading}</div>;
+  if (notFound || !lesson) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--paper)', gap: 16 }}>
+    <div>{t.dictation.practice.notFound}</div><Link href="/dictation">{t.common.backToList}</Link>
+  </div>;
+  if (!currentSentence) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--paper)' }}>{t.dictation.practice.noSentences}</div>;
 
-  if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--paper)', color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>
-      {t.common.loading}
-    </div>
-  );
-
-  if (notFound || !lesson) return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, background: 'var(--paper)' }}>
-      <div style={{ fontSize: 16, color: 'var(--ink)', fontWeight: 600 }}>{t.dictation.practice.notFound}</div>
-      <Link href="/dictation" style={{ color: 'var(--red)', textDecoration: 'none', fontSize: 13 }}>{t.common.backToList}</Link>
-    </div>
-  );
-
-  const levelColor = LEVEL_COLOR[lesson.hsk_level] ?? 'var(--ash)';
-  const alignmentStatus = getAlignmentStatus(lesson.categories);
-  const currentSentence = sentences[currentIndex];
-  const currentResult = results[currentIndex];
+  const displayedInput = composing ? inputBeforeIme : userInput;
+  const liveSlots = matchDictationWords(displayedInput, currentSentence.tokens);
+  const scorableSlots = liveSlots.filter(slot => slot.status !== 'extra');
+  const targetWordCount = scorableSlots.length;
+  const filledWordCount = scorableSlots.filter(slot => slot.status === 'correct' || slot.status === 'wrong').length;
+  const remainingWordCount = scorableSlots.filter(slot => slot.status === 'empty' || slot.status === 'partial').length;
+  const extraWordCount = liveSlots.filter(slot => slot.status === 'extra').length;
+  const correctLiveCount = scorableSlots.filter(slot => slot.status === 'correct').length;
+  const allWordsCorrect = targetWordCount > 0 && correctLiveCount === targetWordCount && !extraWordCount;
+  const activeWordIndex = liveSlots.findIndex(slot => slot.status === 'empty' || slot.status === 'partial');
+  const wordCountColor = extraWordCount ? '#dc2626' : allWordsCorrect ? '#16a34a' : 'var(--ash)';
+  const submissions = Object.values(study.submissions);
+  const totalAnswered = submissions.length;
+  const totalCorrect = submissions.filter(submission => submission.result.is_perfect).length;
+  const scorePercent = sentences.length ? Math.round((submissions.reduce((sum, submission) => {
+    const slots = submission.result.result.filter(slot => slot.status !== 'extra');
+    return sum + (slots.length ? slots.filter(slot => slot.status === 'correct').length / slots.length : 0);
+  }, 0) / sentences.length) * 100) : 0;
   const canPlaySentence = hasAlignedAudio(currentSentence) || ttsSupported;
-  const words = currentSentence?.words ?? [];
-  const liveSlots = matchDictationWords(composing ? inputBeforeIme : userInput, words);
-  const targetWordCount = words.length;
-  const filledWordCount = liveSlots.filter(s => s.status === 'correct' || s.status === 'wrong').length;
-  const remainingWordCount = liveSlots.filter(s => s.status === 'empty' || s.status === 'partial').length;
-  const extraWordCount = liveSlots.filter(s => s.status === 'extra').length;
-  const correctLiveCount = liveSlots.filter(s => s.status === 'correct').length;
-  const allWordsCorrect = targetWordCount > 0 && correctLiveCount === targetWordCount && extraWordCount === 0;
-  const activeWordIndex = liveSlots.findIndex(s => s.status === 'empty' || s.status === 'partial');
-  const wordCountColor = extraWordCount > 0 ? '#dc2626' : allWordsCorrect ? '#16a34a' : 'var(--ash)';
+  const currentHintUsed = study.hintUsed[currentKey] === true;
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--paper)', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <header style={{ background: 'var(--sidebar-bg)', borderBottom: '1px solid rgba(255,255,255,0.07)', position: 'sticky', top: 0, zIndex: 50, flexShrink: 0 }}>
+      <header style={{ background: 'var(--sidebar-bg)', borderBottom: '1px solid rgba(255,255,255,0.07)', position: 'sticky', top: 0, zIndex: 50 }}>
         <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px', height: 54, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Link href="/dictation" style={{ color: 'rgba(200,191,176,0.6)', textDecoration: 'none', fontSize: 13, flexShrink: 0, transition: 'color 0.15s' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#f5f1e8')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(200,191,176,0.6)')}>
-            {t.dictation.backToDictation}
-          </Link>
+          <Link href="/dictation" style={{ color: 'rgba(200,191,176,0.7)', textDecoration: 'none', fontSize: 13 }}>{t.dictation.backToDictation}</Link>
           <span style={{ color: 'rgba(255,255,255,0.15)' }}>|</span>
-          <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, background: levelColor, color: 'white', fontSize: 9.5, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em', flexShrink: 0 }}>
-            HSK {lesson.hsk_level}
-          </span>
-          {alignmentStatus && <AlignmentStatusBadge status={alignmentStatus} />}
-          <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 14, color: '#f5f1e8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-            {lesson.title_zh_simplified}
-          </span>
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(200,191,176,0.5)', flexShrink: 0 }}>
-            {t.dictation.practice.headerStats(lesson.vocabCount ?? sentences.reduce((n, s) => n + s.wordCount, 0), totalAnswered, sentences.length)}
-          </span>
-          {sentences.some(s => s.start == null || s.end == null) && (
-            <Link href={`/dictation/align/${slug}`} style={{
-              padding: '5px 10px', borderRadius: 6, textDecoration: 'none',
-              background: 'rgba(200,57,43,0.2)', color: '#fecaca',
-              fontSize: 11, fontFamily: 'JetBrains Mono, monospace', flexShrink: 0,
-            }}>
-              {t.dictation.manualAlign}
-            </Link>
-          )}
+          <span style={{ padding: '2px 8px', borderRadius: 4, background: levelColor, color: '#fff', fontSize: 10, fontWeight: 700 }}>HSK {lesson.hsk_level}</span>
+          {getAlignmentStatus(lesson.categories) && <span style={{ color: '#86efac', fontSize: 10 }}>{t.common.alignmentStatus[getAlignmentStatus(lesson.categories) as 'Checked' | 'Uncheck']}</span>}
+          <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 14, color: '#f5f1e8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}><HanziZoom text={lesson.title_zh_simplified} /></span>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(200,191,176,0.5)' }}>{t.dictation.practice.headerStats(lesson.vocabCount ?? sentences.reduce((sum, sentence) => sum + sentence.wordCount, 0), totalAnswered, sentences.length)}</span>
         </div>
       </header>
 
-      {/* 3-column layout */}
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '280px 1fr 300px', maxWidth: 1280, margin: '0 auto', width: '100%', padding: '0 24px', gap: 20, boxSizing: 'border-box', minHeight: 0 }}>
-
-        {/* ── LEFT: TTS Controls ──────────────────────────────── */}
-        <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Per-sentence playback */}
-          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <span style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', textTransform: 'uppercase' }}>{t.dictation.practice.listenSentence}</span>
-              {hasAlignedAudio(currentSentence) ? (
-                <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: '#16a34a' }}>{t.dictation.practice.audioReady}</span>
-              ) : ttsSupported ? (
-                <span style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: '#16a34a' }}>{t.dictation.practice.ttsReady}</span>
-              ) : null}
-            </div>
-            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--ash)', marginBottom: 10 }}>
-              {t.dictation.practice.sentenceInfo((currentSentence?.index ?? 0) + 1, currentSentence?.wordCount ?? 0)}
-            </div>
-            {/* Speed */}
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '280px minmax(0, 1fr) 300px', maxWidth: 1280, margin: '0 auto', width: '100%', padding: '0 24px', gap: 20, boxSizing: 'border-box' }}>
+        <aside style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <section style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', marginBottom: 10 }}>{t.dictation.practice.listenSentence}</div>
             <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-              {([0.75, 1] as const).map(rate => (
-                <button key={rate} onClick={() => setPlaybackRate(rate)} style={{
-                  flex: 1, padding: '5px 0', borderRadius: 6,
-                  border: `1px solid ${playbackRate === rate ? levelColor : 'var(--border)'}`,
-                  background: playbackRate === rate ? levelColor : 'transparent',
-                  color: playbackRate === rate ? '#fff' : 'var(--ash)',
-                  fontSize: 11, fontFamily: 'JetBrains Mono, monospace', cursor: 'pointer',
-                  transition: 'all 0.15s',
-                }}>
-                  {rate}x
-                </button>
-              ))}
+              {([0.75, 1] as const).map(rate => <button key={rate} onClick={() => { updateStudy(previous => ({ ...previous, playbackRate: rate })); persistNow(); }} style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: `1px solid ${study.playbackRate === rate ? levelColor : 'var(--border)'}`, background: study.playbackRate === rate ? levelColor : 'transparent', color: study.playbackRate === rate ? '#fff' : 'var(--ash)', cursor: 'pointer' }}>{rate}x</button>)}
             </div>
-            {!hasAlignedAudio(currentSentence) && !ttsSupported && (
-              <div style={{ fontSize: 11, color: '#dc2626', fontFamily: 'JetBrains Mono, monospace', marginBottom: 8 }}>
-                {t.dictation.practice.ttsUnsupported}
-              </div>
-            )}
-          </div>
-
-          {/* Full lesson audio (supplementary) */}
-          {lesson.audio_url && (
-            <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
-              <div style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', marginBottom: 10, textTransform: 'uppercase' }}>
-                {t.dictation.practice.fullAudio}
-              </div>
-              <audio
-                ref={audioRef}
-                src={lesson.audio_url}
-                style={{ width: '100%', height: 36 }}
-                controls
-                onEnded={() => {
-                  clearAudioStop();
-                  setIsPlaying(false);
-                }}
-              />
+            <button onClick={togglePlay} disabled={!canPlaySentence} style={{ width: '100%', padding: '10px 0', borderRadius: 8, border: 0, background: canPlaySentence ? levelColor : 'var(--border)', color: '#fff', fontWeight: 700, cursor: canPlaySentence ? 'pointer' : 'default' }}>{t.dictation.practice.playSentence}</button>
+            <button onClick={replayAudio} disabled={!canPlaySentence} style={{ width: '100%', marginTop: 8, padding: '9px 0', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--ink)', cursor: canPlaySentence ? 'pointer' : 'default' }}>{t.dictation.practice.replay}</button>
+          </section>
+          {lesson.audio_url && <section style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', marginBottom: 10 }}>{t.dictation.practice.fullAudio}</div>
+            <audio ref={audioRef} src={lesson.audio_url} controls style={{ width: '100%' }} />
+          </section>}
+          <section style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', marginBottom: 10 }}>{t.dictation.practice.shortcuts}</div>
+            <div style={{ display: 'grid', gap: 7 }}>
+              {t.dictation.practice.shortcutList.map(shortcut => <div key={shortcut.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, fontSize: 11 }}>
+                <span style={{ color: 'var(--ash)' }}>{shortcut.desc}</span>
+                <kbd style={{ flexShrink: 0, padding: '2px 6px', border: '1px solid var(--border)', borderBottomWidth: 2, borderRadius: 5, background: 'var(--paper-alt)', color: 'var(--ink)', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 }}>{shortcut.key}</kbd>
+              </div>)}
             </div>
-          )}
+            <p style={{ margin: '10px 0 0', color: 'var(--ash-light)', fontSize: 10, lineHeight: 1.5 }}>{t.dictation.practice.shortcutNote}</p>
+          </section>
+          <button onClick={resetLesson} style={{ padding: '9px', borderRadius: 8, border: '1px solid #dc2626', background: 'transparent', color: '#dc2626', cursor: 'pointer' }}>{t.dictation.practice.resetLesson}</button>
+        </aside>
 
-          {/* ĐIỀU KHIỂN */}
-          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
-            <div style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', marginBottom: 12, textTransform: 'uppercase' }}>{t.dictation.practice.controls}</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button
-                onClick={togglePlay}
-                disabled={!canPlaySentence}
-                style={{
-                  padding: '10px 0', borderRadius: 8, border: 'none',
-                  background: !canPlaySentence ? 'var(--border)' : isPlaying ? '#dc2626' : levelColor,
-                  color: '#fff', fontWeight: 700, fontSize: 13, cursor: canPlaySentence ? 'pointer' : 'default',
-                  fontFamily: 'Be Vietnam Pro, sans-serif',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  transition: 'background 0.15s',
-                }}
-              >
-                {isPlaying ? t.dictation.practice.stop : t.dictation.practice.playSentence}
-              </button>
-              <button
-                onClick={replayAudio}
-                disabled={!canPlaySentence}
-                style={{
-                  padding: '10px 0', borderRadius: 8,
-                  border: '1px solid var(--border)', background: 'transparent',
-                  color: canPlaySentence ? 'var(--ink)' : 'var(--border)', fontWeight: 600, fontSize: 13,
-                  cursor: canPlaySentence ? 'pointer' : 'default',
-                  fontFamily: 'Be Vietnam Pro, sans-serif',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  transition: 'all 0.15s',
-                }}
-              >
-                {t.dictation.practice.replay}
-              </button>
-            </div>
-          </div>
-
-          {/* Keyboard shortcuts hint */}
-          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 14 }}>
-            <div style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', marginBottom: 10, textTransform: 'uppercase' }}>{t.dictation.practice.shortcuts}</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {t.dictation.practice.shortcutList.map(({ key, desc }) => (
-                <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, padding: '1px 6px', background: 'var(--paper-alt)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--ink)', whiteSpace: 'nowrap' }}>
-                    {key}
-                  </span>
-                  <span style={{ fontSize: 11, color: 'var(--ash)', fontFamily: 'Be Vietnam Pro, sans-serif', textAlign: 'right' }}>{desc}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* ── CENTER: Input + Diff ─────────────────────────────── */}
-        <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Difficulty tabs */}
-          <div style={{ display: 'flex', gap: 8 }}>
-            {(['easy', 'normal', 'hard'] as const).map(d => (
-              <button key={d} onClick={() => setDifficulty(d)} style={{
-                padding: '5px 16px', borderRadius: 6,
-                border: `1.5px solid ${difficulty === d ? (d === 'easy' ? '#16a34a' : d === 'normal' ? '#a0720a' : '#dc2626') : 'var(--border)'}`,
-                background: difficulty === d ? (d === 'easy' ? '#16a34a' : d === 'normal' ? '#a0720a' : '#dc2626') : 'transparent',
-                color: difficulty === d ? '#fff' : 'var(--ash)',
-                fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace',
-                transition: 'all 0.15s',
-                textTransform: 'capitalize',
-              }}>
-                {t.dictation.practice.difficulty[d]}
-              </button>
-            ))}
+        <main style={{ padding: '24px 0', minWidth: 0 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+            {(['easy', 'normal', 'hard'] as const).map(difficulty => {
+              const color = difficulty === 'easy' ? '#16a34a' : difficulty === 'normal' ? '#a0720a' : '#dc2626';
+              return <button key={difficulty} onClick={() => { updateStudy(previous => ({ ...previous, difficulty })); persistNow(); }} style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${study.difficulty === difficulty ? color : 'var(--border)'}`, background: study.difficulty === difficulty ? color : 'transparent', color: study.difficulty === difficulty ? '#fff' : 'var(--ash)', cursor: 'pointer' }}>{t.dictation.practice.difficulty[difficulty]}</button>;
+            })}
             <div style={{ flex: 1 }} />
-            {/* Sentence nav */}
-            <button onClick={() => setCurrentIndex(i => Math.max(i - 1, 0))} disabled={currentIndex === 0} style={{
-              padding: '5px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent',
-              color: currentIndex === 0 ? 'var(--border)' : 'var(--ash)', cursor: currentIndex === 0 ? 'default' : 'pointer', fontSize: 14,
-            }}>◄</button>
-            <span style={{ padding: '5px 8px', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--ink)', alignSelf: 'center' }}>
-              {currentIndex + 1}/{sentences.length}
-            </span>
-            <button onClick={() => setCurrentIndex(i => Math.min(i + 1, sentences.length - 1))} disabled={currentIndex === sentences.length - 1} style={{
-              padding: '5px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent',
-              color: currentIndex === sentences.length - 1 ? 'var(--border)' : 'var(--ash)', cursor: currentIndex === sentences.length - 1 ? 'default' : 'pointer', fontSize: 14,
-            }}>►</button>
+            <button onClick={() => changeSentence(currentPosition - 1)} disabled={currentPosition === 0}>◄</button>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>{currentPosition + 1}/{sentences.length}</span>
+            <button onClick={() => changeSentence(currentPosition + 1)} disabled={currentPosition === sentences.length - 1}>►</button>
           </div>
-
-          {/* Input area */}
-          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 20, flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {notice && <div role="status" style={{ marginBottom: 12, padding: '8px 10px', borderRadius: 7, background: storageConflict ? 'rgba(220,38,38,0.08)' : 'rgba(22,163,74,0.08)', color: storageConflict ? '#dc2626' : '#3a8a5c', fontSize: 12 }}>{notice}</div>}
+          <section style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                {t.dictation.practice.inputLabel}<span style={{ color: 'var(--ash-light)', fontWeight: 400 }}>{t.dictation.practice.inputSentence((currentSentence?.index ?? 0) + 1, targetWordCount)}</span>
-              </div>
-              <div style={{
-                flexShrink: 0,
-                padding: '4px 8px',
-                borderRadius: 6,
-                border: `1px solid ${extraWordCount > 0 ? 'rgba(220,38,38,0.35)' : allWordsCorrect ? 'rgba(22,163,74,0.35)' : 'var(--border)'}`,
-                background: extraWordCount > 0 ? 'rgba(220,38,38,0.08)' : allWordsCorrect ? 'rgba(22,163,74,0.08)' : 'var(--paper-alt)',
-                color: wordCountColor,
-                fontFamily: 'JetBrains Mono, monospace',
-                fontSize: 11,
-                fontWeight: 700,
-                whiteSpace: 'nowrap',
-              }}>
-                {t.dictation.practice.wordProgress(filledWordCount, targetWordCount)}
-              </div>
+              <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)' }}>{t.dictation.practice.inputLabel} {t.dictation.practice.inputSentence(currentSentence.index + 1, targetWordCount)}</div>
+              <div style={{ color: wordCountColor, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>{t.dictation.practice.wordProgress(filledWordCount, targetWordCount)}</div>
             </div>
-
-            {words.length > 0 && (
+            <p style={{ margin: '10px 0', color: '#dc2626', fontSize: 12 }}>{t.dictation.practice.numberMaskHelp}</p>
+            <div style={{ padding: '14px 12px 16px', border: '1px solid var(--border)', borderRadius: 9, background: 'var(--paper-alt)' }}>
               <WordBlanks
+                tokens={currentSentence.tokens}
                 slots={liveSlots}
-                showExpectedOnWrong
                 activeIndex={currentResult ? -1 : activeWordIndex}
+                wordHints={study.wordHintsUsed[currentKey] ?? {}}
+                openHintId={openWordHintId}
+                showAllPinyin={showHint || study.difficulty === 'easy'}
+                onToggleHint={toggleWordHint}
+                onRevealHint={revealWordHint}
               />
-            )}
+            </div>
 
-            {/* Hint (pinyin) */}
-            {(showHint || difficulty === 'easy') && currentSentence && (
-              <div style={{ padding: '8px 12px', background: 'rgba(160,114,10,0.08)', border: '1px solid rgba(160,114,10,0.2)', borderRadius: 8, fontFamily: 'Be Vietnam Pro, sans-serif', fontSize: 14, color: '#a0720a', lineHeight: 1.8 }}>
-                {currentSentence.pinyin}
-              </div>
-            )}
-
-            <textarea
-              ref={textareaRef}
-              value={userInput}
-              onChange={e => setUserInput(e.target.value)}
-              onCompositionStart={() => {
-                setComposing(true);
-                setInputBeforeIme(userInput);
+            <textarea ref={textareaRef} value={composing ? compositionText : userInput}
+              onChange={event => {
+                if (composing) setCompositionText(event.target.value);
+                else updateStudy(previous => ({ ...previous, drafts: { ...previous.drafts, [currentKey]: event.target.value } }));
               }}
-              onCompositionEnd={e => {
-                setComposing(false);
-                setUserInput(e.currentTarget.value);
+              onCompositionStart={() => { setComposing(true); setInputBeforeIme(userInput); setCompositionText(userInput); }}
+              onCompositionEnd={event => { setComposing(false); setCompositionText(''); updateStudy(previous => ({ ...previous, drafts: { ...previous.drafts, [currentKey]: event.currentTarget.value } })); }}
+              onKeyDown={event => {
+                if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || composing) return;
+                if (event.key === 'Tab') { event.preventDefault(); replayAudio(); }
+                if (event.key === 'h' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); toggleSentenceHint(); }
+                if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void checkAnswer(); }
               }}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  checkAnswer();
-                }
-              }}
+              aria-label={t.dictation.practice.inputSentence(currentSentence.index + 1, targetWordCount)}
               placeholder={t.dictation.practice.inputPlaceholder}
-              style={{
-                width: '100%', boxSizing: 'border-box',
-                minHeight: 100, resize: 'none',
-                padding: '12px 14px',
-                background: 'var(--paper-alt)', border: '1px solid var(--border)',
-                borderRadius: 8, outline: 'none',
-                fontFamily: 'Noto Serif SC, serif', fontSize: 20,
-                color: 'var(--ink)', lineHeight: 1.8,
-                transition: 'border-color 0.15s',
-              }}
-              onFocus={e => (e.target.style.borderColor = levelColor)}
-              onBlur={e => (e.target.style.borderColor = 'var(--border)')}
-            />
-            <div style={{ marginTop: -8, fontFamily: 'Be Vietnam Pro, sans-serif', fontSize: 12, color: wordCountColor }}>
-              {extraWordCount > 0
-                ? t.dictation.practice.tooManyChars
-                : remainingWordCount > 0
-                  ? t.dictation.practice.wordsMissing(remainingWordCount)
-                  : allWordsCorrect
-                    ? t.dictation.practice.allCorrect
-                    : t.dictation.practice.checkRedWords}
+              style={{ width: '100%', boxSizing: 'border-box', minHeight: 105, marginTop: 16, padding: '12px 14px', background: 'var(--paper-alt)', border: '1px solid var(--border)', borderRadius: 8, outline: 'none', fontFamily: 'Noto Serif SC, serif', fontSize: 20, color: 'var(--ink)', lineHeight: 1.8 }} />
+            <div style={{ marginTop: 6, color: wordCountColor, fontSize: 12 }}>{extraWordCount ? t.dictation.practice.tooManyChars : remainingWordCount ? t.dictation.practice.wordsMissing(remainingWordCount) : allWordsCorrect ? t.dictation.practice.allCorrect : t.dictation.practice.checkRedWords}</div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button onClick={() => void checkAnswer()} disabled={checkingIndex != null || !userInput.trim()} style={{ flex: 1, padding: '10px 0', border: 0, borderRadius: 8, background: userInput.trim() ? levelColor : 'var(--border)', color: '#fff', fontWeight: 700, cursor: userInput.trim() ? 'pointer' : 'default' }}>{checkingIndex === currentSentence.index ? t.dictation.practice.checking : t.dictation.practice.check}</button>
+              {study.difficulty !== 'easy' && <button onClick={toggleSentenceHint} style={{ padding: '10px 14px', borderRadius: 8, border: `1px solid ${currentHintUsed ? '#dc2626' : 'var(--border)'}`, background: 'transparent', color: currentHintUsed ? '#dc2626' : 'var(--ash)', cursor: 'pointer' }}>{showHint ? t.dictation.practice.hideHint : t.dictation.practice.showHint}</button>}
+              {(currentResult || userInput) && <button onClick={resetSentence} aria-label={t.dictation.practice.resetSentence} style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer' }}>↩</button>}
             </div>
+            {currentResult && <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{t.dictation.practice.result}</span><strong style={{ color: currentResult.is_perfect ? '#16a34a' : '#dc2626' }}>{currentResult.is_perfect ? t.dictation.practice.perfect : t.dictation.practice.correctWords(currentResult.result.filter(slot => slot.status === 'correct').length, currentResult.result.filter(slot => slot.status !== 'extra').length)}</strong></div>
+              {!currentResult.is_perfect && <div style={{ marginTop: 10, padding: 10, background: 'rgba(22,163,74,0.06)', borderRadius: 6 }}><div style={{ fontSize: 10, color: 'var(--ash)' }}>{t.dictation.practice.correctAnswer}</div><HanziZoom text={currentResult.correct_hanzi} /><div style={{ color: 'var(--ash)', fontSize: 12 }}>{currentResult.pinyin}</div></div>}
+            </div>}
+          </section>
+        </main>
 
-            {/* Action buttons */}
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={checkAnswer}
-                disabled={isChecking || !userInput.trim()}
-                style={{
-                  flex: 1, padding: '10px 0', borderRadius: 8, border: 'none',
-                  background: !userInput.trim() ? 'var(--border)' : levelColor,
-                  color: '#fff', fontWeight: 700, fontSize: 13, cursor: !userInput.trim() ? 'default' : 'pointer',
-                  fontFamily: 'Be Vietnam Pro, sans-serif', transition: 'background 0.15s',
-                }}
-              >
-                {isChecking ? t.dictation.practice.checking : t.dictation.practice.check}
-              </button>
-              {difficulty !== 'easy' && (
-                <button
-                  onClick={() => {
-                    setShowHint(h => !h);
-                    if (!showHint) setHintUsed(prev => ({ ...prev, [currentIndex]: true }));
-                  }}
-                  style={{
-                    padding: '10px 16px', borderRadius: 8,
-                    border: `1px solid ${hintUsed[currentIndex] ? '#dc2626' : 'var(--border)'}`,
-                    background: 'transparent',
-                    color: hintUsed[currentIndex] ? '#dc2626' : 'var(--ash)',
-                    fontSize: 12, cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace',
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  {showHint ? t.dictation.practice.hideHint : t.dictation.practice.showHint}
-                </button>
-              )}
-              {currentResult && (
-                <button
-                  onClick={() => {
-                    setUserInput('');
-                    setResults(prev => { const n = { ...prev }; delete n[currentIndex]; return n; });
-                  }}
-                  style={{
-                    padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)',
-                    background: 'transparent', color: 'var(--ash)', fontSize: 12, cursor: 'pointer',
-                    fontFamily: 'JetBrains Mono, monospace',
-                  }}
-                >
-                  ↩
-                </button>
-              )}
-            </div>
-
-            {/* Diff result */}
-            {currentResult && (
-              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.dictation.practice.result}</span>
-                  {currentResult.is_perfect ? (
-                    <span style={{ fontSize: 12, color: '#16a34a', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace' }}>{t.dictation.practice.perfect}</span>
-                  ) : (
-                    <span style={{ fontSize: 12, color: '#dc2626', fontFamily: 'JetBrains Mono, monospace' }}>
-                      {t.dictation.practice.correctWords(currentResult.result.filter(r => r.status === 'correct').length, currentResult.result.filter(r => r.status !== 'extra').length)}
-                    </span>
-                  )}
-                </div>
-                {!currentResult.is_perfect && (
-                  <div style={{ marginTop: 12, padding: '8px 12px', background: 'rgba(22,163,74,0.06)', borderRadius: 6, border: '1px solid rgba(22,163,74,0.15)' }}>
-                    <div style={{ fontSize: 10, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', marginBottom: 4, textTransform: 'uppercase' }}>{t.dictation.practice.correctAnswer}</div>
-                    <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 18, color: '#16a34a', lineHeight: 1.6 }}>{currentResult.correct_hanzi}</div>
-                    <div style={{ fontFamily: 'Be Vietnam Pro, sans-serif', fontSize: 12, color: 'var(--ash)', marginTop: 2 }}>{currentResult.pinyin}</div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── RIGHT: BÀN CHÉP ─────────────────────────────────── */}
-        <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ash)' }}>{t.dictation.practice.board}</span>
-            <ScoreBar pct={scorePercent} />
-          </div>
-
-          <div ref={rightPanelRef} style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 2 }}>
-            {sentences.map((s, i) => {
-              const r = results[i];
-              const isActive = i === currentIndex;
-              const isPerfect = r?.is_perfect;
-              const isAnswered = !!r;
-              const isHinted = hintUsed[i];
-
-              let borderColor = 'var(--border)';
-              if (isActive) borderColor = levelColor;
-              else if (isPerfect) borderColor = '#16a34a';
-              else if (isAnswered) borderColor = '#dc2626';
-
-              return (
-                <div
-                  key={s.index}
-                  data-sentence={i}
-                  onClick={() => setCurrentIndex(i)}
-                  style={{
-                    padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
-                    border: `1.5px solid ${borderColor}`,
-                    background: isActive ? 'var(--paper-alt)' : 'var(--card-bg)',
-                    transition: 'all 0.15s',
-                    position: 'relative',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isAnswered ? 6 : 0 }}>
-                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: isActive ? levelColor : 'var(--ash)', fontWeight: isActive ? 700 : 400 }}>
-                      #{s.index + 1}
-                    </span>
-                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                      {isHinted && <span style={{ fontSize: 9, color: '#dc2626', fontFamily: 'JetBrains Mono, monospace' }}>{t.dictation.practice.hintUsed}</span>}
-                      {isPerfect && <span style={{ fontSize: 12 }}>✓</span>}
-                    </div>
-                  </div>
-
-                  {isAnswered && r ? (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {r.result.filter(c => c.status !== 'extra').slice(0, 12).map((c, ci) => (
-                        <span key={ci} style={{
-                          fontFamily: 'Noto Serif SC, serif', fontSize: 13,
-                          color: SLOT_COLOR[c.status],
-                        }}>
-                          {c.status === 'empty' || c.status === 'partial' ? '*'.repeat(Math.max(c.expected.length, 1)) : c.typed}
-                        </span>
-                      ))}
-                      {r.result.filter(c => c.status !== 'extra').length > 12 && <span style={{ fontSize: 10, color: 'var(--ash)' }}>…</span>}
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, userSelect: 'none', fontSize: 12, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.08em' }}>
-                      {(s.words ?? []).slice(0, 8).map((w, wi) => (
-                        <span key={wi}>{'*'.repeat(Math.max(w.length, 1))}</span>
-                      ))}
-                      {(s.words ?? []).length > 8 && <span>…</span>}
-                    </div>
-                  )}
-                </div>
-              );
+        <aside style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--ash)' }}>{t.dictation.practice.board}</span><ScoreBar pct={scorePercent} /></div>
+          <div ref={rightPanelRef} style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {sentences.map((sentence, position) => {
+              const key = wordKey(sentence.index);
+              const submission = study.submissions[key];
+              const active = position === currentPosition;
+              const border = active ? levelColor : submission?.result.is_perfect ? '#16a34a' : submission ? '#dc2626' : 'var(--border)';
+              return <button key={sentence.index} data-sentence={position} onClick={() => changeSentence(position)} style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 8, border: `1.5px solid ${border}`, background: active ? 'var(--paper-alt)' : 'var(--card-bg)', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--ash)' }}>#{sentence.index + 1}</span>{study.hintUsed[key] && <span style={{ color: '#dc2626', fontSize: 9 }}>{t.dictation.practice.hintUsed}</span>}</div>
+                {submission ? <div style={{ marginTop: 5, color: submission.result.is_perfect ? '#16a34a' : '#dc2626', fontSize: 12 }}>{submission.result.is_perfect ? '✓' : '✗'} {submission.input}</div> : <div style={{ marginTop: 5, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace' }}>{sentence.tokens.map(token => token.scorable ? normalizeDictationInput(token.text).split('').map(char => /^[0-9]$/.test(char) ? '*' : '*').join('') : token.text).join('')}</div>}
+              </button>;
             })}
           </div>
-
-          {/* Summary */}
-          {totalAnswered > 0 && (
-            <div style={{ flexShrink: 0, padding: '10px 12px', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 8 }}>
-              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--ash)', marginBottom: 4 }}>{t.dictation.practice.summary}</div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <span style={{ fontSize: 12, color: '#16a34a', fontFamily: 'JetBrains Mono, monospace' }}>✓ {totalCorrect}</span>
-                <span style={{ fontSize: 12, color: '#dc2626', fontFamily: 'JetBrains Mono, monospace' }}>✗ {totalAnswered - totalCorrect}</span>
-                <span style={{ fontSize: 12, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace' }}>/ {sentences.length}</span>
-              </div>
-            </div>
-          )}
-        </div>
+          {totalAnswered > 0 && <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 8 }}><div>{t.dictation.practice.summary}</div><div>✓ {totalCorrect} · ✗ {totalAnswered - totalCorrect} · / {sentences.length}</div></div>}
+        </aside>
       </div>
     </div>
   );

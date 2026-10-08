@@ -1,5 +1,7 @@
 # Từ vựng theo cấp & Tìm kiếm từ vựng
 
+> Cập nhật 2026-10-04: luồng tìm kiếm hiện tại có tra/lưu Hanzii và ưu tiên nghĩa chữ đơn. Xem [Tra từ và bổ sung nghĩa Hanzii](hanzii-dictionary.md). Các mô tả DB cũ bên dưới là tài liệu trước cutover.
+
 > Tài liệu mô tả code hiện tại (đọc ngày 2026-10-01). Số liệu đo bằng truy vấn chỉ đọc trên `data/lessons.db`.
 
 ## Mục đích

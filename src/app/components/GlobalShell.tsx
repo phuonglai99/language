@@ -1,4 +1,5 @@
 'use client';
+import HanziZoom from '@/app/components/HanziZoom';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -67,7 +68,7 @@ export default function GlobalShell() {
   const currentSection = activeSection(pathname);
   const [open, setOpen] = useState(true);
   const [sidebarW, setSidebarW] = useState(SIDEBAR_W_DEFAULT);
-  const draggingRef = useRef(false);
+  const [dragging, setDragging] = useState(false);
   const dragStartX = useRef(0);
   const dragStartW = useRef(SIDEBAR_W_DEFAULT);
   const [lessons, setLessons] = useState<LessonMeta[]>([]);
@@ -81,6 +82,8 @@ export default function GlobalShell() {
   const searchRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const composingRef = useRef(false);
+  const searchAbortRef = useRef<AbortController | null>(null);
+  const [searchToast, setSearchToast] = useState('');
 
   useEffect(() => {
     fetch('/api/lessons').then(r => r.json()).then(d => setLessons(d.lessons ?? []));
@@ -99,27 +102,52 @@ export default function GlobalShell() {
     document.body.style.setProperty('--sidebar-w', open ? `${sidebarW}px` : '52px');
   }, [open, sidebarW]);
 
-  useEffect(() => {
-    if (currentSection) {
-      setExpanded(p => ({ ...p, [currentSection]: true }));
-    }
-  }, [currentSection]);
+  const [previousSection, setPreviousSection] = useState(currentSection);
+  if (previousSection !== currentSection) {
+    setPreviousSection(currentSection);
+    if (currentSection) setExpanded(p => ({ ...p, [currentSection]: true }));
+  }
 
   const doSearch = useCallback((q: string) => {
+    searchAbortRef.current?.abort();
     if (!q.trim()) { setSearchResults([]); setSearching(false); return; }
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
     setSearching(true);
-    fetch(`/api/search?q=${encodeURIComponent(q)}`)
-      .then(r => r.json())
-      .then(d => { setSearchResults(d.results ?? []); setSearching(false); })
-      .catch(() => setSearching(false));
+    setSearchToast('');
+    fetch(`/api/search?q=${encodeURIComponent(q)}`, { signal: controller.signal })
+      .then(r => { if (!r.ok) throw new Error('Search failed'); return r.json(); })
+      .then(d => {
+        if (controller.signal.aborted) return;
+        const results = d.results ?? [];
+        setSearchResults(results);
+        setSearching(false);
+        if (!results.length) setSearchToast(t.shell.sidebar.search.noResults);
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setSearching(false);
+        setSearchResults([]);
+        setSearchToast(t.shell.sidebar.search.error);
+      });
   }, []);
 
   useEffect(() => {
+    searchAbortRef.current?.abort();
     if (composingRef.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => doSearch(query), 300);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      searchAbortRef.current?.abort();
+    };
   }, [query, doSearch]);
+
+  useEffect(() => {
+    if (!searchToast) return;
+    const timer = setTimeout(() => setSearchToast(''), 4000);
+    return () => clearTimeout(timer);
+  }, [searchToast]);
 
   const grouped = HSK_LEVELS.reduce<Record<string, LessonMeta[]>>((acc, lvl) => {
     acc[lvl] = lessons.filter(l => l.level === lvl);
@@ -133,9 +161,14 @@ export default function GlobalShell() {
     setSubExpanded(p => ({ ...p, [key]: !p[key] }));
 
   const closeAll = () => { setQuery(''); setSearchResults([]); };
+  const collapseSidebar = () => {
+    closeAll();
+    setOpen(false);
+  };
 
   return (
     <>
+      {searchToast && <div role="status" aria-live="polite" style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 1000, maxWidth: 360, padding: '12px 18px', borderRadius: 10, background: '#26344a', color: '#fff', boxShadow: '0 4px 20px #0003' }}>{searchToast}</div>}
       {/* Mini rail — shown when sidebar is closed */}
       {!open && (
         <div style={{
@@ -184,7 +217,7 @@ export default function GlobalShell() {
         borderRight: '1px solid rgba(255,255,255,0.08)',
         display: 'flex', flexDirection: 'column',
         transform: open ? 'translateX(0)' : `translateX(-${sidebarW}px)`,
-        transition: draggingRef.current ? 'none' : 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
+        transition: dragging ? 'none' : 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
         overflow: 'hidden',
         boxShadow: open ? '4px 0 24px rgba(0,0,0,0.2)' : 'none',
       }}>
@@ -197,7 +230,7 @@ export default function GlobalShell() {
             </Link>
             {/* Collapse button */}
             <button
-              onClick={closeAll}
+              onClick={collapseSidebar}
               title={t.shell.sidebar.collapse}
               style={{
                 width: 28, height: 28, borderRadius: 7, border: '1px solid rgba(255,255,255,0.1)',
@@ -217,9 +250,9 @@ export default function GlobalShell() {
             <input
               ref={searchRef}
               value={query}
-              onChange={e => setQuery(e.target.value)}
-              onCompositionStart={() => { composingRef.current = true; }}
-              onCompositionEnd={e => { composingRef.current = false; setQuery((e.target as HTMLInputElement).value); }}
+              onChange={e => { searchAbortRef.current?.abort(); setSearchToast(''); setSearching(!!e.target.value.trim()); setQuery(e.target.value); }}
+              onCompositionStart={() => { composingRef.current = true; searchAbortRef.current?.abort(); if (debounceRef.current) clearTimeout(debounceRef.current); }}
+              onCompositionEnd={e => { composingRef.current = false; const value = (e.target as HTMLInputElement).value; setQuery(value); doSearch(value); }}
               placeholder={t.shell.sidebar.search.placeholder}
               style={{
                 width: '100%', boxSizing: 'border-box',
@@ -249,7 +282,7 @@ export default function GlobalShell() {
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                 >
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                    <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 16, color: '#f5f1e8', fontWeight: 600 }}>{r.zh}</span>
+                    <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 16, color: '#f5f1e8', fontWeight: 600 }}><HanziZoom text={r.zh} pinyin={r.py} meaning={r.vn} sourceLessonId={r.lessonId ?? undefined} /></span>
                     <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(200,191,176,0.6)' }}>{r.py}</span>
                     {r.pos && <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: 'rgba(200,191,176,0.4)', letterSpacing: '0.1em' }}>{r.pos}</span>}
                   </div>
@@ -436,7 +469,7 @@ export default function GlobalShell() {
         <div
           style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 5, cursor: 'col-resize', zIndex: 10 }}
           onMouseDown={e => {
-            draggingRef.current = true;
+            setDragging(true);
             dragStartX.current = e.clientX;
             dragStartW.current = sidebarW;
             const onMove = (ev: MouseEvent) => {
@@ -444,7 +477,7 @@ export default function GlobalShell() {
               setSidebarW(next);
             };
             const onUp = () => {
-              draggingRef.current = false;
+              setDragging(false);
               document.removeEventListener('mousemove', onMove);
               document.removeEventListener('mouseup', onUp);
               document.body.style.cursor = '';

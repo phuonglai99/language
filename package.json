@@ -7,13 +7,18 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test": "node --import tsx --test tests/unit/*.test.ts tests/integration/*.test.ts",
+    "test:watch": "node --import tsx --test --watch tests/unit/*.test.ts tests/integration/*.test.ts",
+    "check": "npm run lint && npm run typecheck && npm test",
     "import:mb": "tsx scripts/import-mandarin-bean.ts",
     "crawl": "node scripts/crawl-mandarin-bean.mjs",
     "crawl:grammar": "tsx scripts/crawl-hanzii-grammar.ts",
     "migrate:v4": "tsx scripts/migrate-v4/index.ts",
     "migrate:v4:report": "tsx scripts/migrate-v4/report.ts",
     "crawl:kanji": "tsx scripts/crawl-hanzii.ts",
-    "patch:audio": "tsx scripts/patch-audio-urls.ts"
+    "patch:audio": "tsx scripts/patch-audio-urls.ts",
+    "crawl:words": "tsx scripts/crawl-hanzii-words.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",

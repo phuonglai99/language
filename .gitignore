@@ -67,3 +67,7 @@ DEPLOY_SQLITE_VPS.md
 !/data/backups/MANIFEST.md
 *.db-wal
 *.db-shm
+
+# Hanzii vocabulary crawl reports
+/data/hanzii-words*-report.json
+/data/hanzii-words*-report.json.tmp

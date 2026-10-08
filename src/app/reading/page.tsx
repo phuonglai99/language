@@ -1,3 +1,4 @@
+import HanziZoom from '@/app/components/HanziZoom';
 import Link from 'next/link';
 import { t } from '@/i18n';
 import { queryPassages } from '@/server';
@@ -94,7 +95,7 @@ export default async function ReadingPage({ searchParams }: Props) {
                       </div>
                     </div>
 
-                    <div className="lesson-card-title-zh">{l.title_zh_simplified}</div>
+                    <div className="lesson-card-title-zh"><HanziZoom text={l.title_zh_simplified} /></div>
                     <div className="lesson-card-title-en">{l.title_en}</div>
 
                     <div className="lesson-card-foot">

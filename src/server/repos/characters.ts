@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { getDb } from '../db/connection';
-import { fetchFromHanzii, type HanziiCharacter } from '../services/hanzii';
+import { fetchFromHanzii, type HanziiCharacter } from '../third-party-service/hanzii';
 import {
   BOTU_FROM_ROLE, formationLabel, normalizeStrokeData, parseFormation, parseFrequency, parseRadical,
 } from '@/shared/hanzi';

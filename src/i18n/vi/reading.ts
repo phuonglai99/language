@@ -29,6 +29,7 @@ export const reading = {  breadcrumb: {
     lastOfLevel: (hsk: number) => `Hết HSK ${hsk}`,
   },
   word: {
+    translation: (word: string) => `Nghĩa của ${word}`,
     speakAria: (hanzi: string) => `Phát âm ${hanzi}`,
     lookingUp: 'Đang tra…',
   },

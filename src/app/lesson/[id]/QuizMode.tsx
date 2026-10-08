@@ -1,7 +1,11 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { shouldIgnorePageShortcut } from '@/lib/keyboard';
+import HanziZoom from '@/app/components/HanziZoom';
+import { LoadingOverlay } from '@/app/components/LoadingOverlay';
+import { useState, useEffect, useRef } from 'react';
 import type { VocabCard } from '@/types';
 import { t } from '@/i18n';
+import { LOCAL_MISTAKE_FOLDER_ID, addLocalNoteItem, deleteLocalNoteItem, listLocalNoteItems } from '@/lib/localNotes';
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -45,6 +49,8 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
   const [elapsed, setElapsed] = useState(0);
   const [savedMistakeIds, setSavedMistakeIds] = useState<Map<string, string>>(new Map());
   const [deletedMistakes, setDeletedMistakes] = useState<Set<string>>(new Set());
+  const [starting, setStarting] = useState(false);
+  const startFrameRef = useRef<number | null>(null);
   const countOptions = [
     ...COUNT_OPTIONS.filter(n => n <= vocab.length).map(n => ({ label: t.lesson.quiz.countOption(n), value: n })),
     { label: t.common.all, value: vocab.length },
@@ -64,18 +70,31 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
   }
 
   function startQuiz() {
-    const qs = buildQuestions(count);
-    setQuestions(qs);
-    setIdx(0);
-    setAnswered(false);
-    setChosen(null);
-    setMissed([]);
-    setCorrect(0);
-    setStartTime(Date.now());
-    setSavedMistakeIds(new Map());
-    setDeletedMistakes(new Set());
-    setStep('playing');
+    if (starting) return;
+    setStarting(true);
+    // Two animation frames let the overlay paint before synchronous question generation begins.
+    startFrameRef.current = window.requestAnimationFrame(() => {
+      startFrameRef.current = window.requestAnimationFrame(() => {
+        startFrameRef.current = null;
+        const qs = buildQuestions(count);
+        setQuestions(qs);
+        setIdx(0);
+        setAnswered(false);
+        setChosen(null);
+        setMissed([]);
+        setCorrect(0);
+        setStartTime(Date.now());
+        setSavedMistakeIds(new Map());
+        setDeletedMistakes(new Set());
+        setStep('playing');
+        setStarting(false);
+      });
+    });
   }
+
+  useEffect(() => () => {
+    if (startFrameRef.current !== null) window.cancelAnimationFrame(startFrameRef.current);
+  }, []);
 
   const q = questions[idx];
 
@@ -88,13 +107,13 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
     else {
       setMissed(m => [...m, q.card]);
       const zh = q.card.zh;
-      fetch('/api/notes/items', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folderId: 'mistake', zh, py: q.card.py, vn: q.card.vn, pos: q.card.pos, sourceLessonId: lessonId ?? null }),
-      }).then(r => r.json()).then(d => {
-        if (d.item?.id) setSavedMistakeIds(m => new Map(m).set(zh, d.item.id));
-      }).catch(() => {});
+      const sourceKey = `quiz:${lessonId ?? 'notes'}:${q.card.id}`.slice(0, 240);
+      if (addLocalNoteItem(LOCAL_MISTAKE_FOLDER_ID, {
+        sourceKey, zh, py: q.card.py, vn: q.card.vn, pos: q.card.pos, sourceLessonId: lessonId ?? null,
+      })) {
+        const item = listLocalNoteItems(LOCAL_MISTAKE_FOLDER_ID).find(value => value.sourceKey === sourceKey || (value.zh === zh && value.py === q.card.py));
+        if (item) setSavedMistakeIds(m => new Map(m).set(zh, item.id));
+      }
       onMistake?.(q.card);
     }
     speak(q.card.zh);
@@ -113,7 +132,7 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (step !== 'playing') return;
+      if (step !== 'playing' || shouldIgnorePageShortcut(e) || e.ctrlKey || e.metaKey || e.altKey) return;
       if ((e.key === 'Enter' || e.key === ' ') && answered) { e.preventDefault(); next(); }
     };
     window.addEventListener('keydown', handler);
@@ -124,7 +143,9 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
 
   // ── Config ──────────────────────────────────────────────────────────────────
   if (step === 'config') return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, padding: '48px 24px', width: 'min(440px,100%)' }}>
+    <>
+      {starting && <LoadingOverlay label={t.lesson.quiz.preparing} />}
+      <div aria-busy={starting} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, padding: '48px 24px', width: 'min(440px,100%)' }}>
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 40, fontWeight: 700, color: 'var(--red)', lineHeight: 1 }}>{t.lesson.quiz.title}</div>
         <div style={{ fontSize: 13, color: 'var(--ash)', marginTop: 6 }}>{t.lesson.quiz.subtitle(vocab.length)}</div>
@@ -172,11 +193,12 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
           ))}
         </div>
       </div>
-      <button onClick={startQuiz} style={{
+      <button onClick={startQuiz} disabled={starting} style={{
         width: '100%', padding: '14px', background: 'var(--red)', color: 'white',
-        border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer',
+        border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: starting ? 'wait' : 'pointer', opacity: starting ? 0.7 : 1,
       }}>{t.common.start}</button>
-    </div>
+      </div>
+    </>
   );
 
   // ── Done ────────────────────────────────────────────────────────────────────
@@ -208,14 +230,14 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {missed.filter(c => !deletedMistakes.has(c.zh)).map(card => (
                 <div key={card.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 18, fontWeight: 700, color: 'var(--red)', minWidth: 44 }}>{card.zh}</span>
+                  <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 18, fontWeight: 700, color: 'var(--red)', minWidth: 44 }}><HanziZoom text={card.zh} pinyin={card.py} /></span>
                   <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--ash)' }}>{card.py}</span>
                   <span style={{ fontSize: 13, color: 'var(--ink-soft)', flex: 1 }}>{card.vn}</span>
                   {savedMistakeIds.has(card.zh) && (
                     <button
                       onClick={() => {
                         const itemId = savedMistakeIds.get(card.zh)!;
-                        fetch(`/api/notes/items/${itemId}`, { method: 'DELETE' }).catch(() => {});
+                        deleteLocalNoteItem(itemId);
                         setDeletedMistakes(s => new Set(s).add(card.zh));
                       }}
                       title={t.lesson.quiz.removeMistakeTitle}
@@ -233,8 +255,9 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
 
         <div style={{ display: 'flex', gap: 10, width: '100%' }}>
           <button onClick={() => setStep('config')} style={{ flex: 1, padding: '12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--card-bg)', cursor: 'pointer', fontSize: 14, color: 'var(--ink)' }}>{t.lesson.quiz.reconfigure}</button>
-          <button onClick={startQuiz} style={{ flex: 1, padding: '12px', background: 'var(--red)', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>{t.lesson.quiz.retry}</button>
+          <button onClick={startQuiz} disabled={starting} style={{ flex: 1, padding: '12px', background: 'var(--red)', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: starting ? 'wait' : 'pointer', opacity: starting ? 0.7 : 1 }}>{t.lesson.quiz.retry}</button>
         </div>
+        {starting && <LoadingOverlay label={t.lesson.quiz.preparing} />}
       </div>
     );
   }
@@ -263,7 +286,7 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
         {q.direction === 'zh-to-vn' ? (
           <>
             <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ash-light)' }}>{q.card.pos}</div>
-            <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 'clamp(60px,13vw,96px)', fontWeight: 700, color: 'var(--ink)', lineHeight: 1 }}>{q.card.zh}</div>
+            <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 'clamp(60px,13vw,96px)', fontWeight: 700, color: 'var(--ink)', lineHeight: 1 }}><HanziZoom text={q.card.zh} pinyin={q.card.py} /></div>
             {answered && (
               <div style={{ marginTop: 6, textAlign: 'center' }}>
                 <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 15, color: 'var(--red)', marginRight: 8 }}>{q.card.py}</span>
@@ -277,7 +300,7 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
             <div style={{ fontSize: 'clamp(20px,5vw,28px)', fontWeight: 600, color: 'var(--ink)', lineHeight: 1.5, textAlign: 'center', maxWidth: '100%' }}>{q.card.vn}</div>
             {answered && (
               <div style={{ marginTop: 6, textAlign: 'center' }}>
-                <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 28, fontWeight: 700, color: 'var(--red)', marginRight: 8 }}>{q.card.zh}</span>
+                <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 28, fontWeight: 700, color: 'var(--red)', marginRight: 8 }}><HanziZoom text={q.card.zh} pinyin={q.card.py} /></span>
                 <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, color: 'var(--ash)' }}>{q.card.py}</span>
               </div>
             )}
@@ -298,7 +321,8 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
               else if (isChosen) { bg = 'var(--red-light)'; border = 'var(--red)'; color = 'var(--red)'; }
             }
             return (
-              <button key={c} disabled={answered} onClick={() => answerMultiple(c)} style={{
+              <div key={c} style={{ position: 'relative' }}>
+              <button disabled={answered} onClick={() => answerMultiple(c)} style={{ width: '100%', height: '100%',
                 padding: '13px 14px', border: `1.5px solid ${border}`, borderRadius: 7,
                 background: bg, cursor: answered ? 'default' : 'pointer',
                 textAlign: 'center', lineHeight: 1.4, transition: 'all 0.12s',
@@ -313,6 +337,10 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
                   <span style={{ fontSize: 13, fontWeight: 500, color, textAlign: 'left', width: '100%' }}>{c}</span>
                 )}
               </button>
+              {q.direction === 'vn-to-zh' && <span style={{ position: 'absolute', top: 2, right: 6, fontSize: 20 }}>
+                <HanziZoom text={c} pinyin={q.choicesPy[ci]}>⤢</HanziZoom>
+              </span>}
+              </div>
             );
           })}
         </div>

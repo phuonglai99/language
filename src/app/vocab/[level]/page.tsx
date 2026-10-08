@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { VocabListCard } from '@/app/components/VocabListCard';
 import { Pagination } from '@/app/components/Pagination';
-import { speakChinese } from '@/lib/speech';
+import { SpeechSettings } from '@/app/components/SpeechSettings';
 import { t } from '@/i18n';
 
 interface VocabItem {
@@ -20,21 +20,34 @@ const LEVEL_COLOR: Record<string, string> = {
 
 const PAGE_SIZE = 10;
 
-const speak = (text: string) => { speakChinese(text); };
-
 export default function VocabLevelPage() {
   const params = useParams();
   const level = decodeURIComponent(params.level as string);
+  return <VocabLevelContent key={level} level={level} />;
+}
+
+function VocabLevelContent({ level }: { level: string }) {
   const [items, setItems] = useState<VocabItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    setLoading(true);
-    fetch(`/api/vocab?level=${encodeURIComponent(level)}`)
-      .then(r => r.json())
-      .then(d => { setItems(d.items ?? []); setLoading(false); });
+    const controller = new AbortController();
+    fetch(`/api/vocab?level=${encodeURIComponent(level)}`, { signal: controller.signal })
+      .then(r => { if (!r.ok) throw new Error('Vocabulary request failed'); return r.json(); })
+      .then(d => {
+        if (controller.signal.aborted) return;
+        setItems(d.items ?? []);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setError(true);
+        setLoading(false);
+      });
+    return () => controller.abort();
   }, [level]);
 
   const filtered = search.trim()
@@ -75,11 +88,14 @@ export default function VocabLevelPage() {
       </header>
 
       <main style={{ maxWidth: 900, margin: '0 auto', padding: '24px 24px 80px' }}>
+        <SpeechSettings />
         {loading && (
           <div style={{ textAlign: 'center', padding: '80px 0', color: '#9ca3af', fontSize: 14 }}>{t.common.loading}</div>
         )}
 
-        {!loading && filtered.length === 0 && (
+        {error && <p role="alert" style={{ textAlign: 'center', color: 'var(--ash)' }}>{t.vocab.level.loadError}</p>}
+
+        {!loading && !error && filtered.length === 0 && (
           <div style={{ textAlign: 'center', padding: '80px 0', color: '#9ca3af', fontSize: 14 }}>{t.vocab.level.empty}</div>
         )}
 
@@ -111,5 +127,3 @@ export default function VocabLevelPage() {
     </div>
   );
 }
-
-

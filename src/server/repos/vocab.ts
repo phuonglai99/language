@@ -21,7 +21,7 @@ interface WordCardRow {
 
 const CARD_COLUMNS = `
   w.id, w.hanzi, w.pinyin, w.pinyin_plain, w.hsk_level, w.created_at,
-  s.id AS sense_id, s.pos, COALESCE(s.meaning_vi, s.meaning_en) AS meaning, e.zh AS ex_zh, e.vi AS ex_vi
+  s.id AS sense_id, s.pos, COALESCE(NULLIF(trim(s.meaning_vi), ''), s.meaning_en) AS meaning, e.zh AS ex_zh, e.vi AS ex_vi
 `;
 
 /** Word lists: the word's first Vietnamese sense (else first sense) and its first example. */
@@ -29,7 +29,7 @@ const LIST_CARD_SELECT = `
   SELECT ${CARD_COLUMNS}
   FROM words w
   LEFT JOIN word_senses s ON s.id = (
-    SELECT id FROM word_senses WHERE word_id = w.id ORDER BY meaning_vi IS NULL, position LIMIT 1
+    SELECT id FROM word_senses WHERE word_id = w.id ORDER BY NULLIF(trim(meaning_vi), '') IS NULL, position LIMIT 1
   )
   LEFT JOIN sense_examples e ON e.sense_id = s.id AND e.position = (
     SELECT MIN(position) FROM sense_examples WHERE sense_id = s.id
@@ -45,7 +45,7 @@ const LESSON_CARD_SELECT = `
   FROM lesson_words lw
   JOIN words w ON w.id = lw.word_id
   LEFT JOIN word_senses s ON s.id = COALESCE(lw.sense_id, (
-    SELECT id FROM word_senses WHERE word_id = w.id ORDER BY meaning_vi IS NULL, position LIMIT 1
+    SELECT id FROM word_senses WHERE word_id = w.id ORDER BY NULLIF(trim(meaning_vi), '') IS NULL, position LIMIT 1
   ))
   LEFT JOIN sense_examples e ON e.sense_id = s.id AND e.position = (
     SELECT MAX(position) FROM sense_examples WHERE sense_id = s.id
@@ -198,10 +198,9 @@ export async function listVocabByLevel(level: string): Promise<LevelVocabItemDTO
  * Ranked: exact hanzi, hanzi prefix, exact pinyin, pinyin prefix, then the rest.
  * Each result links to its HSK word list, else to the first lesson that teaches it.
  */
-export async function searchWords(query: string, limit = 40): Promise<SearchResultDTO[]> {
+export async function searchWords(query: string, limit = 40, db: Database.Database = getDb(), vietnameseOnly = false): Promise<SearchResultDTO[]> {
   const q = query.trim();
   if (!q) return [];
-  const db = getDb();
   const plainPinyin = pinyinPlain(q);
   const plainVi = stripVietnamese(q);
 
@@ -227,6 +226,7 @@ export async function searchWords(query: string, limit = 40): Promise<SearchResu
     ) AS lesson
     FROM (${LIST_CARD_SELECT}) r
     WHERE r.id IN (SELECT value FROM json_each(?))
+      ${vietnameseOnly ? "AND EXISTS (SELECT 1 FROM word_senses s WHERE s.word_id = r.id AND trim(COALESCE(s.meaning_vi, '')) <> '')" : ''}
     ORDER BY
       CASE WHEN r.hanzi = ? THEN 0 WHEN r.hanzi LIKE ? ESCAPE '\\' THEN 1
            WHEN r.pinyin_plain = ? THEN 2 WHEN r.pinyin_plain LIKE ? ESCAPE '\\' THEN 3 ELSE 4 END,

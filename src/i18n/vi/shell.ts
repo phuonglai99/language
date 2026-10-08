@@ -11,7 +11,8 @@ export const shell = {
     search: {
       placeholder: 'Tìm từ vựng (pinyin, hán tự…)',
       searching: 'Đang tìm…',
-      noResults: 'Không tìm thấy từ nào',
+      noResults: 'Chưa cập nhật, không tìm thấy',
+      error: 'Không thể tìm kiếm lúc này, vui lòng thử lại.',
     },
     reading: {
       all: (n: number) => `Tất cả ${n} bài →`,

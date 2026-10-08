@@ -14,6 +14,10 @@ const LEGACY_WORD_LISTS: { id: string; level: number }[] = [
 ];
 
 const nextConfig: NextConfig = {
+  // Small VPS builds can opt into one worker without slowing local builds.
+  ...(process.env.HSK_LOW_MEMORY_BUILD === '1' ? {
+    experimental: { cpus: 1, webpackMemoryOptimizations: true },
+  } : {}),
   serverExternalPackages: ['better-sqlite3', 'mammoth', 'xlsx'],
   async redirects() {
     return LEGACY_WORD_LISTS.flatMap(l => [

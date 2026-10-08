@@ -1,4 +1,5 @@
 'use client';
+import HanziZoom from '@/app/components/HanziZoom';
 import { useState } from 'react';
 import Link from 'next/link';
 import { speakChinese } from '@/lib/speech';
@@ -52,7 +53,7 @@ export function VocabListCard({ item, accent = '#3b82f6', num, href, onClick, on
 
       {/* Chinese + Pinyin */}
       <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0, textAlign: 'left' }}>
-        <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 34, fontWeight: 700, color: 'var(--ink)', lineHeight: 1 }}>{item.zh}</div>
+        <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 34, fontWeight: 700, color: 'var(--ink)', lineHeight: 1 }}><HanziZoom text={item.zh} pinyin={item.py} meaning={item.vn} /></div>
         <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: accent, marginTop: 4, fontWeight: 500 }}>{item.py}</div>
       </div>
 
@@ -75,7 +76,7 @@ export function VocabListCard({ item, accent = '#3b82f6', num, href, onClick, on
           <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ash-light)', marginBottom: 4 }}>{item.pos}</div>
         )}
         <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>{item.vn}</div>
-        {item.ex?.zh && <div style={{ fontSize: 12, color: 'var(--ash)', marginTop: 4, fontFamily: 'Noto Serif SC, serif' }}>{item.ex.zh}</div>}
+        {item.ex?.zh && <div style={{ fontSize: 12, color: 'var(--ash)', marginTop: 4, fontFamily: 'Noto Serif SC, serif' }}><HanziZoom text={item.ex.zh} /></div>}
         {item.ex?.vn && <div style={{ fontSize: 11, color: 'var(--ash-light)', marginTop: 2 }}>{item.ex.vn}</div>}
       </div>
 

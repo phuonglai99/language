@@ -21,6 +21,7 @@ export async function GET(
       pinyin: s.pinyin,
       wordCount: s.wordCount,
       words: s.words,
+      tokens: s.tokens,
       start: t?.start ?? null,
       end: t?.end ?? null,
     };

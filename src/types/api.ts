@@ -178,3 +178,56 @@ export interface SearchResultDTO {
   vn: string;
   pos: string;
 }
+
+// ── Vocabulary typing practice ───────────────────────────────────────────────
+
+export type PracticeKindDTO = 'hanzi-to-pinyin' | 'hanzi-to-hanzi' | 'vi-to-hanzi';
+
+interface PracticeQuestionBaseDTO {
+  questionId: string;
+  kind: PracticeKindDTO;
+  wordId: number;
+  /** Opaque scheduling key; identical spellings share it even across different readings. */
+  wordKey: string;
+  senseId: number;
+  pos: string;
+}
+
+export type PracticeQuestionDTO =
+  | (PracticeQuestionBaseDTO & { kind: 'hanzi-to-pinyin' | 'hanzi-to-hanzi'; hanzi: string; meaningVi: string })
+  | (PracticeQuestionBaseDTO & { kind: 'vi-to-hanzi'; meaningVi: string; exampleVi: string });
+
+export interface PracticeAnswerDTO {
+  hanzi: string;
+  pinyin: string;
+  pinyinNumber: string;
+  meaningVi: string;
+  pos: string;
+  example: { zh: string; pinyin: string; vi: string };
+}
+
+export interface PracticeBankDTO {
+  lessonId: string;
+  contentSignature: string;
+  scoringVersion: number;
+  questions: PracticeQuestionDTO[];
+  counts: Record<PracticeKindDTO, number>;
+  excluded: Record<string, number>;
+}
+
+export interface PracticeCheckDTO {
+  questionId: string;
+  kind: PracticeKindDTO;
+  contentSignature: string;
+  scoringVersion: number;
+  status: 'correct' | 'incorrect';
+  feedback: string;
+  issues?: {
+    kind: 'wrong-base' | 'wrong-tone' | 'missing' | 'extra';
+    expectedIndex: number | null;
+    actualIndex: number | null;
+    expected?: { base: string; tone: 1 | 2 | 3 | 4 | 5 };
+    actual?: { base: string; tone: 1 | 2 | 3 | 4 | 5 };
+  }[];
+  answer: PracticeAnswerDTO;
+}

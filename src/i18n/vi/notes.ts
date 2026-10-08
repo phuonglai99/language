@@ -1,5 +1,11 @@
 /** UI text: notes. See src/i18n/README.md. */
 export const notes = {
+  local: {
+    onDevice: 'Trên thiết bị',
+    localOnly: 'Chỉ lưu trên thiết bị này · không đồng bộ lên server',
+    storageError: 'Không thể lưu Notes. Có thể đã đạt giới hạn 500 từ hoặc bộ nhớ trình duyệt bị chặn.',
+    summary: (count: number, max: number, used: string) => `${count}/${max} từ · đang dùng khoảng ${used} trên thiết bị`,
+  },
   actions: {
     cancel: 'Huỷ',
     delete: 'Xoá',
