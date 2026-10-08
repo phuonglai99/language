@@ -28,6 +28,7 @@ type Lesson = {
 type Sentence = DictationSentence & { start: number | null; end: number | null };
 type Submission = { input: string; result: DictationCheckResult };
 type ActiveAudioClip = { sentenceIndex: number; start: number; end: number };
+type PlaybackSource = 'audio' | 'tts' | null;
 type StudyState = {
   currentSentenceIndex: number;
   drafts: Record<string, string>;
@@ -226,12 +227,14 @@ function DictationSession({ slug }: { slug: string }) {
   const [composing, setComposing] = useState(false);
   const [inputBeforeIme, setInputBeforeIme] = useState('');
   const [compositionText, setCompositionText] = useState('');
+  const [playbackSource, setPlaybackSource] = useState<PlaybackSource>(null);
   const ttsSupported = useSyncExternalStore(subscribeSpeechSupport, getSpeechSupport, () => false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const rightPanelRef = useRef<HTMLDivElement>(null);
   const stopHandlerRef = useRef<(() => void) | null>(null);
   const activeAudioClipRef = useRef<ActiveAudioClip | null>(null);
+  const speechRunRef = useRef(0);
 
   const replaceStudy = useCallback((next: StudyState) => {
     studyRef.current = next;
@@ -344,6 +347,7 @@ function DictationSession({ slug }: { slug: string }) {
     if (audioRef.current) audioRef.current.playbackRate = study.playbackRate;
   }, [study.playbackRate]);
   useEffect(() => () => {
+    speechRunRef.current++;
     window.speechSynthesis?.cancel();
     clearAudioStop();
     activeAudioClipRef.current = null;
@@ -366,10 +370,12 @@ function DictationSession({ slug }: { slug: string }) {
   const changeSentence = useCallback((position: number) => {
     const sentence = sentences[position];
     if (!sentence || sentence.index === studyRef.current.currentSentenceIndex) return;
+    speechRunRef.current++;
     window.speechSynthesis?.cancel();
     clearAudioStop();
     activeAudioClipRef.current = null;
     audioRef.current?.pause();
+    setPlaybackSource(null);
     setShowHint(false);
     setOpenWordHintId(null);
     setComposing(false);
@@ -416,18 +422,31 @@ function DictationSession({ slug }: { slug: string }) {
 
   const speakSentence = useCallback((hanzi: string, rate: number) => {
     if (!ttsSupported) return;
+    clearAudioStop();
+    activeAudioClipRef.current = null;
+    audioRef.current?.pause();
+    const speechRun = ++speechRunRef.current;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(hanzi);
     utterance.lang = 'zh-CN';
     utterance.rate = rate * 0.85;
-    utterance.onstart = () => undefined;
+    utterance.onstart = () => {
+      if (speechRunRef.current === speechRun) setPlaybackSource('tts');
+    };
+    const finish = () => {
+      if (speechRunRef.current === speechRun) setPlaybackSource(null);
+    };
+    utterance.onend = finish;
+    utterance.onerror = finish;
     window.speechSynthesis.speak(utterance);
-  }, [ttsSupported]);
+  }, [ttsSupported, clearAudioStop]);
   const playSentence = useCallback((sentenceIndex: number, start: number, end: number) => {
     const audio = audioRef.current;
     if (!audio) return;
     clearAudioStop();
+    speechRunRef.current++;
     window.speechSynthesis?.cancel();
+    setPlaybackSource(previous => previous === 'tts' ? null : previous);
     activeAudioClipRef.current = { sentenceIndex, start, end };
     const stop = () => {
       if (audio.currentTime >= end + 0.15) {
@@ -441,7 +460,7 @@ function DictationSession({ slug }: { slug: string }) {
     const begin = () => {
       audio.currentTime = start;
       audio.playbackRate = studyRef.current.playbackRate;
-      void audio.play().catch(() => undefined);
+      void audio.play().catch(() => setPlaybackSource(null));
     };
     if (audio.readyState >= 1) begin();
     else {
@@ -467,10 +486,14 @@ function DictationSession({ slug }: { slug: string }) {
       if (audio && !audio.paused) audio.pause();
       else if (audio && canResume) {
         audio.playbackRate = studyRef.current.playbackRate;
-        void audio.play().catch(() => undefined);
+        void audio.play().catch(() => setPlaybackSource(null));
       } else playSentence(currentSentence.index, currentSentence.start as number, currentSentence.end as number);
+    } else if (playbackSource === 'tts' || window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+      speechRunRef.current++;
+      window.speechSynthesis.cancel();
+      setPlaybackSource(null);
     } else if (currentSentence.hanzi) speakSentence(currentSentence.hanzi, studyRef.current.playbackRate);
-  }, [currentSentence, playSentence, speakSentence]);
+  }, [currentSentence, playbackSource, playSentence, speakSentence]);
 
   const resetSentence = useCallback(() => {
     if (!currentSentence) return;
@@ -576,6 +599,7 @@ function DictationSession({ slug }: { slug: string }) {
     return sum + (slots.length ? slots.filter(slot => slot.status === 'correct').length / slots.length : 0);
   }, 0) / sentences.length) * 100) : 0;
   const canPlaySentence = hasAlignedAudio(currentSentence) || ttsSupported;
+  const isPlaying = playbackSource !== null;
   const currentHintUsed = study.hintUsed[currentKey] === true;
 
   return (
@@ -598,12 +622,24 @@ function DictationSession({ slug }: { slug: string }) {
             <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
               {([0.75, 1] as const).map(rate => <button key={rate} onClick={() => { updateStudy(previous => ({ ...previous, playbackRate: rate })); persistNow(); }} style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: `1px solid ${study.playbackRate === rate ? levelColor : 'var(--border)'}`, background: study.playbackRate === rate ? levelColor : 'transparent', color: study.playbackRate === rate ? '#fff' : 'var(--ash)', cursor: 'pointer' }}>{rate}x</button>)}
             </div>
-            <button onClick={togglePlay} disabled={!canPlaySentence} style={{ width: '100%', padding: '10px 0', borderRadius: 8, border: 0, background: canPlaySentence ? levelColor : 'var(--border)', color: '#fff', fontWeight: 700, cursor: canPlaySentence ? 'pointer' : 'default' }}>{t.dictation.practice.playSentence}</button>
+            <button onClick={togglePlay} disabled={!canPlaySentence} aria-pressed={isPlaying} style={{ width: '100%', padding: '10px 0', borderRadius: 8, border: 0, background: !canPlaySentence ? 'var(--border)' : isPlaying ? '#dc2626' : levelColor, color: '#fff', fontWeight: 700, cursor: canPlaySentence ? 'pointer' : 'default' }}>{isPlaying ? t.dictation.practice.stop : t.dictation.practice.playSentence}</button>
             <button onClick={replayAudio} disabled={!canPlaySentence} style={{ width: '100%', marginTop: 8, padding: '9px 0', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--ink)', cursor: canPlaySentence ? 'pointer' : 'default' }}>{t.dictation.practice.replay}</button>
           </section>
           {lesson.audio_url && <section style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
             <div style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', marginBottom: 10 }}>{t.dictation.practice.fullAudio}</div>
-            <audio ref={audioRef} src={lesson.audio_url} controls style={{ width: '100%' }} />
+            <audio
+              ref={audioRef}
+              src={lesson.audio_url}
+              controls
+              style={{ width: '100%' }}
+              onPlay={() => setPlaybackSource('audio')}
+              onPause={() => setPlaybackSource(previous => previous === 'audio' ? null : previous)}
+              onEnded={() => {
+                clearAudioStop();
+                activeAudioClipRef.current = null;
+                setPlaybackSource(previous => previous === 'audio' ? null : previous);
+              }}
+            />
           </section>}
           <section style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
             <div style={{ fontSize: 10, letterSpacing: '0.12em', fontFamily: 'JetBrains Mono, monospace', color: 'var(--ash)', marginBottom: 10 }}>{t.dictation.practice.shortcuts}</div>
