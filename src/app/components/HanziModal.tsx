@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import type { SearchResultDTO } from '@/types/api';
 import { canSpeakChinese, speakChinese } from '@/lib/speech';
 import CharacterDetails from './CharacterDetails';
+import { LoadingIndicator } from './LoadingIndicator';
 import { t } from '@/i18n';
 
 export interface HanziInfo {
@@ -72,7 +73,7 @@ export default function HanziModal({ text, pinyin, meaning, definition, hsk, sou
           {[...text].map((char, i) => <span key={i}>{char}</span>)}
         </div>
         {displayPinyin && <p className="hanzi-zoom-pinyin">{displayPinyin}</p>}
-        {lookupState === 'loading' && <p role="status">{t.reading.word.lookingUp}</p>}
+        {lookupState === 'loading' && <LoadingIndicator variant="inline" label={t.reading.word.lookingUp} />}
         {lookupState === 'error' && <p role="status">{t.shell.sidebar.search.error}</p>}
         {displayMeaning && <p>{displayMeaning}</p>}
         {shouldLookup && lookupState === 'done' && !displayMeaning && !definition && <p>{t.shell.sidebar.search.noResults}</p>}

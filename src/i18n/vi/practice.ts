@@ -72,7 +72,7 @@ export const practice = {
     saveError: 'Không thể tự lưu từ vào Notes trên thiết bị. Bạn vẫn có thể tiếp tục luyện.',
   },
   actions: {
-    check: 'Kiểm tra', skip: 'Bỏ qua', reveal: 'Xem đáp án', next: 'Câu tiếp theo',
+    check: 'Kiểm tra', skip: 'Next', reveal: 'Xem đáp án', next: 'Câu tiếp theo',
     finish: 'Xem tổng kết', newSession: 'Bắt đầu phiên mới', retryWrong: 'Ôn từ còn sai',
     speak: 'Nghe phát âm', changeSetup: 'Cấu hình lại', cancel: 'Tiếp tục phiên hiện tại', confirmReset: 'Xóa phiên và bắt đầu lại',
   },

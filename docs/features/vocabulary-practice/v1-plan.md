@@ -19,7 +19,7 @@ Các lựa chọn từ mục 2 trở đi là thiết kế gốc của v1. Trạn
 
 ## 2. Phạm vi và vị trí trong app
 
-Thêm tab **Luyện nhập** ở `/lesson/[id]`. Màn cấu hình dùng nguồn từ HSK trong DB (`hsk-1`…`hsk-6` hoặc `hsk-random`); repo/API vẫn giữ khả năng đọc bài upload để tương thích luồng v1. Dùng từ/cụm từ, chưa yêu cầu dịch hay nhập cả câu dài.
+Thêm mục **Luyện nhập** trực tiếp trên sidebar, mở route riêng `/practice`. Màn cấu hình dùng nguồn từ HSK trong DB (`hsk-1`…`hsk-6` hoặc `hsk-random`); repo/API vẫn giữ khả năng đọc bài upload để tương thích luồng v1. Dùng từ/cụm từ, chưa yêu cầu dịch hay nhập cả câu dài.
 
 | Mã dạng bài | Nhãn hiển thị | Đề | Bài nhập |
 |---|---|---|---|
@@ -37,7 +37,7 @@ Thêm tab **Luyện nhập** ở `/lesson/[id]`. Màn cấu hình dùng nguồn 
 
 | Vị trí | Hiện trạng và tác động |
 |---|---|
-| `src/app/lesson/[id]/page.tsx` | Có `flash`, `quiz`, `match`, `list`; cần thêm tab, xử lý URL và cô lập state theo bài |
+| `src/app/practice/page.tsx`, `GlobalShell.tsx` | Route luyện nhập riêng và lối vào trực tiếp từ sidebar |
 | `src/app/lesson/[id]/QuizMode.tsx` | Hiện là trắc nghiệm hai hướng; không dùng nguyên cách tạo đáp án lựa chọn cho bài tự nhập |
 | `src/types/index.ts` | `VocabCard` có `id`, `zh`, `py`, `vn`, `pos`, `ex`; chưa có `senseId`, ngôn ngữ nghĩa hoặc các đáp án được duyệt |
 | `src/server/repos/vocab.ts` | `vn` có thể lấy `meaning_en` khi thiếu `meaning_vi`; không thể coi mọi `card.vn` là tiếng Việt |
@@ -53,7 +53,7 @@ Trước khi triển khai Next.js, đọc hướng dẫn liên quan trong `node_
 
 ### 4.1. Chọn bài tập
 
-1. Mở tab Luyện nhập, chọn HSK 1–6 hoặc Ngẫu nhiên trên toàn bộ kho HSK 1–6.
+1. Mở **Luyện nhập** từ sidebar, chọn HSK 1–6 hoặc Ngẫu nhiên trên toàn bộ kho HSK 1–6.
 2. Chọn Nhìn chữ Hán / Nhìn nghĩa tiếng Việt / Kết hợp.
 3. Với Nhìn chữ Hán, chọn Gõ pinyin hoặc Gõ Hán tự.
 4. Chọn 10/20/30 từ hoặc tất cả từ đủ dữ liệu; mặc định 10 hoặc số từ hiện có nếu ít hơn.

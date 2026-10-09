@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { HanziiGrammar } from '@/types';
 import { Pagination } from '@/app/components/Pagination';
+import { LoadingIndicator } from '@/app/components/LoadingIndicator';
 import { UNLEVELED_LABEL } from '@/shared/grammar';
 import { t } from '@/i18n';
 
@@ -113,7 +114,7 @@ function GrammarLevelContent({ level }: { level: string }) {
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
       <header style={{ background: '#1e3a8a', position: 'sticky', top: 0, zIndex: 50, boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>
         <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', gap: 14 }}>
-          <Link href="/" style={{ textDecoration: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 13, flexShrink: 0, transition: 'color 0.15s' }}
+          <Link href="/grammar" style={{ textDecoration: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 13, flexShrink: 0, transition: 'color 0.15s' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
             onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}>{t.common.back}</Link>
           <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.12)', flexShrink: 0 }} />
@@ -160,7 +161,7 @@ function GrammarLevelContent({ level }: { level: string }) {
 
       <main style={{ maxWidth: 900, margin: '0 auto', padding: '24px 24px 80px' }}>
         {loading && (
-          <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--ash)', fontSize: 14 }}>{t.common.loading}</div>
+          <LoadingIndicator label={t.common.loading} />
         )}
 
         {!loading && pageItems.map((g, i) => (

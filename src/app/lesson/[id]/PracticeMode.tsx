@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { t } from '@/i18n';
 import { speakChinese } from '@/lib/speech';
 import LocalNoteFolderModal from '@/app/components/LocalNoteFolderModal';
+import { LoadingIndicator } from '@/app/components/LoadingIndicator';
 import { addLocalNoteItem, getLocalNoteFolder, type LocalNoteFolder } from '@/lib/localNotes';
 import type { PracticeAnswerDTO, PracticeBankDTO, PracticeCheckDTO, PracticeQuestionDTO } from '@/types/api';
 import {
@@ -14,12 +15,30 @@ import {
   type VocabularyPracticeProgressV1,
 } from '@/lib/vocabularyPracticeProgress';
 
-const panel: React.CSSProperties = { width: 'min(720px, 100%)', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 14, padding: 'clamp(18px, 4vw, 32px)' };
+const panel: React.CSSProperties = { position: 'relative', width: 'min(720px, 100%)', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 14, padding: 'clamp(18px, 4vw, 32px)' };
 const button: React.CSSProperties = { border: '1px solid var(--border)', borderRadius: 8, background: 'var(--paper-alt)', color: 'var(--ink)', padding: '10px 16px', cursor: 'pointer', fontWeight: 600 };
 const primary: React.CSSProperties = { ...button, background: 'var(--red)', borderColor: 'var(--red)', color: 'white' };
 const recordKey = (item: PracticeQueueItem) => item.phase === 'review' ? `${item.questionId}::review` : item.questionId;
 const HSK_SOURCES = ['hsk-1', 'hsk-2', 'hsk-3', 'hsk-4', 'hsk-5', 'hsk-6', 'hsk-random'] as const;
 type HskPracticeSource = typeof HSK_SOURCES[number];
+
+function playCorrectTone(context: AudioContext | null) {
+  if (!context) return;
+  try {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const now = context.currentTime;
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(660, now);
+    oscillator.frequency.setValueAtTime(880, now + 0.11);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.16, now + 0.018);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
+    oscillator.connect(gain).connect(context.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.33);
+  } catch { /* Audio feedback is optional. */ }
+}
 
 function initialPracticeSource(lessonId: string): HskPracticeSource {
   return HSK_SOURCES.includes(lessonId as HskPracticeSource) ? lessonId as HskPracticeSource : 'hsk-1';
@@ -87,12 +106,20 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [showNoteFolderModal, setShowNoteFolderModal] = useState(false);
   const [localNotesError, setLocalNotesError] = useState('');
+  const [feedbackEffect, setFeedbackEffect] = useState<'correct' | 'incorrect' | null>(null);
   const composing = useRef(false);
   const compositionEndedAt = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const requestGeneration = useRef(0);
   const progressRef = useRef<VocabularyPracticeProgressV1 | null>(null);
   const storageConflictRef = useRef(false);
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const feedbackAudioRef = useRef<AudioContext | null>(null);
+
+  useEffect(() => () => {
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    if (feedbackAudioRef.current) void feedbackAudioRef.current.close();
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -174,7 +201,8 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
       initialQuestionIds: built.initialQuestionIds, currentIndex: 0, records,
     };
     storageConflictRef.current = false;
-    setPending(null); setProgress(next); setConfig(sessionConfig); setConfirmReset(false); setRequestError(''); setFormatError(''); setStorageConflict(false);
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    setFeedbackEffect(null); setPending(null); setProgress(next); setConfig(sessionConfig); setConfirmReset(false); setRequestError(''); setFormatError(''); setStorageConflict(false);
   }, [bank, config, sourceId]);
 
   const currentItem = progress?.queue[progress.currentIndex];
@@ -233,6 +261,10 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
 
   const submit = useCallback(async () => {
     if (!bank || !currentQuestion || !currentRecord || !currentItem || pending || composing.current) return;
+    if (!feedbackAudioRef.current && typeof AudioContext !== 'undefined') {
+      try { feedbackAudioRef.current = new AudioContext(); } catch { /* Audio feedback is optional. */ }
+    }
+    if (feedbackAudioRef.current?.state === 'suspended') void feedbackAudioRef.current.resume();
     const input = currentRecord.draft;
     setPending('check'); setRequestError(''); setFormatError('');
     const generation = requestGeneration.current;
@@ -249,9 +281,18 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
         ...record, validAttempts: record.validAttempts + 1, submission: data,
         firstTryCorrect: data.status === 'correct' && record.validAttempts === 0 && !record.answerViewed,
       }));
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
       if (data.status === 'correct') {
-        advance();
+        setFeedbackEffect('correct');
+        playCorrectTone(feedbackAudioRef.current);
+        feedbackTimerRef.current = setTimeout(() => {
+          if (generation !== requestGeneration.current) return;
+          setFeedbackEffect(null);
+          advance();
+        }, 650);
       } else {
+        setFeedbackEffect('incorrect');
+        feedbackTimerRef.current = setTimeout(() => setFeedbackEffect(null), 520);
         saveToLocalNotes(data.answer, currentQuestion);
         scheduleReview(currentQuestion.questionId, currentKey);
         focusAnswer(true);
@@ -297,9 +338,9 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
     advance();
   }, [advance, bank, changeRecord, config, currentKey, currentQuestion, currentRecord, progress?.config, saveToLocalNotes, scheduleReview, sourceId]);
 
-  if (!bank && !loadError) return <div style={panel}>{t.practice.loading}</div>;
+  if (!bank && !loadError) return <div style={panel}><LoadingIndicator label={t.practice.loading} /></div>;
   if (loadError) return <div style={panel}><p>{t.practice.loadError}</p><button style={primary} onClick={() => { setLoadError(false); setBank(null); setRestored(false); setReload(value => value + 1); }}>{t.practice.retryLoad}</button></div>;
-  if (!bank || !restored) return <div style={panel}>{t.practice.loading}</div>;
+  if (!bank || !restored) return <div style={panel}><LoadingIndicator label={t.practice.loading} /></div>;
 
   if (!progress) return (
     <section style={panel} aria-labelledby="practice-title">
@@ -405,6 +446,7 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
   const descriptionId = isPinyin ? 'practice-pinyin-help' : 'practice-hanzi-help';
 
   return <section style={panel} aria-labelledby="practice-kind">
+    {feedbackEffect && <div className={`practice-feedback-burst practice-feedback-burst--${feedbackEffect}`} aria-hidden="true"><span>{feedbackEffect === 'correct' ? '✓' : '×'}</span></div>}
     {(storageFailed || storageConflict) && <div role="alert" style={{ padding: 10, background: 'var(--gold-light)', borderRadius: 8, marginBottom: 12 }}>{storageConflict ? t.practice.errors.otherTab : t.practice.errors.storageFailed}</div>}
     {localNotesError && <div role="alert" style={{ padding: 10, background: 'var(--red-light)', color: 'var(--red)', borderRadius: 8, marginBottom: 12 }}>{localNotesError}</div>}
     {confirmReset && <div role="alertdialog" aria-modal="true" style={{ padding: 14, background: 'var(--paper-alt)', border: '1px solid var(--border)', borderRadius: 9, marginBottom: 16 }}>
@@ -429,10 +471,6 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
       onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; compositionEndedAt.current = Date.now(); }}
       onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229 && !composing.current && Date.now() - compositionEndedAt.current > 80) { event.preventDefault(); void submit(); } }}
       style={{ boxSizing: 'border-box', width: '100%', minHeight: 48, padding: '11px 13px', border: `1px solid ${formatError ? 'var(--red)' : 'var(--border)'}`, borderRadius: 8, background: 'var(--paper)', color: 'var(--ink)', fontSize: isPinyin ? 17 : 24 }} />
-    {isPinyin ? <div id={descriptionId} style={{ marginTop: 10, fontSize: 12.5, color: 'var(--ash)', lineHeight: 1.6 }}>
-      <p style={{ margin: 0 }}>{t.practice.pinyinHelp.short}</p><strong>{t.practice.pinyinHelp.reminder}</strong>
-      <details style={{ marginTop: 8 }}><summary style={{ cursor: 'pointer' }}>{t.practice.pinyinHelp.summary}</summary><table style={{ width: '100%', marginTop: 8, borderCollapse: 'collapse' }}><thead><tr><th>{t.practice.pinyinHelp.table.tone}</th><th>{t.practice.pinyinHelp.table.marked}</th><th>{t.practice.pinyinHelp.table.typed}</th></tr></thead><tbody>{[['1','mā','ma1'],['2','má','ma2'],['3','mǎ','ma3'],['4','mà','ma4'],[t.practice.pinyinHelp.table.neutral,'ma','ma5']].map(row => <tr key={row[2]}>{row.map(cell => <td key={cell} style={{ textAlign: 'center', padding: 4, borderTop: '1px solid var(--border)' }}>{cell}</td>)}</tr>)}</tbody></table></details>
-    </div> : <p id={descriptionId} style={{ margin: '10px 0 0', fontSize: 12.5, color: 'var(--ash)', lineHeight: 1.6 }}>{t.practice.hanziHelp}</p>}
     <div aria-live="polite" style={{ minHeight: 24, marginTop: 12 }}>
       {formatError && <div style={{ color: 'var(--red)' }}>{formatError}</div>}
       {requestError && <div role="alert" style={{ color: 'var(--red)' }}>{requestError}</div>}
@@ -441,12 +479,12 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
       {shownAnswer && result?.issues?.map(issue => <div key={`${issue.kind}-${issue.expectedIndex}-${issue.actualIndex}`} style={{ fontSize: 13, marginTop: 3 }}>{issueMessage(issue)}</div>)}
     </div>
     {shownAnswer && answerCard(shownAnswer, () => speakChinese(shownAnswer.hanzi))}
-    {!hasResult && <div style={{ marginTop: 14, color: 'var(--ash)', fontSize: 12.5 }}>
-      <kbd style={{ padding: '2px 7px', border: '1px solid var(--border)', borderBottomWidth: 2, borderRadius: 5, background: 'var(--paper-alt)', color: 'var(--ink)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>Enter</kbd>{' '}
-      {t.practice.shortcuts.enter}
-    </div>}
-    <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', marginTop: 18, position: 'sticky', bottom: 10 }}>
-      {!hasResult ? <><button type="button" style={primary} disabled={pending != null} onClick={() => void submit()}>{pending === 'check' ? t.practice.loading : t.practice.actions.check}</button><button type="button" style={button} disabled={pending != null} onClick={skip}>{t.practice.actions.skip}</button><button type="button" style={button} disabled={pending != null} onClick={() => void reveal()}>{t.practice.actions.reveal}</button></> : <button type="button" style={primary} onClick={advance}>{progress.currentIndex + 1 >= progress.queue.length ? t.practice.actions.finish : t.practice.actions.next}</button>}
+    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 9, flexWrap: 'wrap', marginTop: 18, position: 'sticky', bottom: 10 }}>
+      {!hasResult ? <><button type="button" title={`Enter · ${t.practice.shortcuts.enter}`} style={primary} disabled={pending != null} onClick={() => void submit()}>{pending === 'check' ? <LoadingIndicator variant="inline" label={t.practice.loading} /> : t.practice.actions.check}</button><button type="button" style={button} disabled={pending != null} onClick={skip}>{t.practice.actions.skip}</button><button type="button" style={button} disabled={pending != null} onClick={() => void reveal()}>{pending === 'reveal' ? <LoadingIndicator variant="inline" label={t.practice.loading} /> : t.practice.actions.reveal}</button></> : <button type="button" style={primary} onClick={advance}>{progress.currentIndex + 1 >= progress.queue.length ? t.practice.actions.finish : t.practice.actions.next}</button>}
     </div>
+    {isPinyin ? <div id={descriptionId} style={{ marginTop: 22, paddingTop: 16, borderTop: '1px solid var(--border)', fontSize: 12.5, color: 'var(--ash)', lineHeight: 1.6 }}>
+      <p style={{ margin: 0 }}>{t.practice.pinyinHelp.short}</p><strong>{t.practice.pinyinHelp.reminder}</strong>
+      <details style={{ marginTop: 8 }}><summary style={{ cursor: 'pointer' }}>{t.practice.pinyinHelp.summary}</summary><table style={{ width: '100%', marginTop: 8, borderCollapse: 'collapse' }}><thead><tr><th>{t.practice.pinyinHelp.table.tone}</th><th>{t.practice.pinyinHelp.table.marked}</th><th>{t.practice.pinyinHelp.table.typed}</th></tr></thead><tbody>{[['1','mā','ma1'],['2','má','ma2'],['3','mǎ','ma3'],['4','mà','ma4'],[t.practice.pinyinHelp.table.neutral,'ma','ma5']].map(row => <tr key={row[2]}>{row.map(cell => <td key={cell} style={{ textAlign: 'center', padding: 4, borderTop: '1px solid var(--border)' }}>{cell}</td>)}</tr>)}</tbody></table></details>
+    </div> : <p id={descriptionId} style={{ margin: '22px 0 0', paddingTop: 16, borderTop: '1px solid var(--border)', fontSize: 12.5, color: 'var(--ash)', lineHeight: 1.6 }}>{t.practice.hanziHelp}</p>}
   </section>;
 }

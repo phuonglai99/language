@@ -1,5 +1,10 @@
 /** UI text: grammar. See src/i18n/README.md. */
 export const grammar = {
+  index: {
+    title: 'Chủ điểm ngữ pháp',
+    subtitle: 'Chọn cấp độ để xem toàn bộ chủ điểm ngữ pháp.',
+    openLevel: 'Xem chủ điểm',
+  },
   searchPlaceholder: 'Tìm ngữ pháp…',
   pointCount: (n: number) => `${n} điểm ngữ pháp`,
   noMatch: (query: string) => `Không tìm thấy ngữ pháp nào khớp với "${query}"`,

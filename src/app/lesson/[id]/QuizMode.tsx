@@ -1,7 +1,7 @@
 'use client';
 import { shouldIgnorePageShortcut } from '@/lib/keyboard';
 import HanziZoom from '@/app/components/HanziZoom';
-import { LoadingOverlay } from '@/app/components/LoadingOverlay';
+import { LoadingIndicator } from '@/app/components/LoadingIndicator';
 import { useState, useEffect, useRef } from 'react';
 import type { VocabCard } from '@/types';
 import { t } from '@/i18n';
@@ -144,7 +144,7 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
   // ── Config ──────────────────────────────────────────────────────────────────
   if (step === 'config') return (
     <>
-      {starting && <LoadingOverlay label={t.lesson.quiz.preparing} />}
+      {starting && <LoadingIndicator variant="overlay" label={t.lesson.quiz.preparing} />}
       <div aria-busy={starting} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, padding: '48px 24px', width: 'min(440px,100%)' }}>
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 40, fontWeight: 700, color: 'var(--red)', lineHeight: 1 }}>{t.lesson.quiz.title}</div>
@@ -257,7 +257,7 @@ export default function QuizMode({ vocab, speak, onMistake, lessonId }: QuizMode
           <button onClick={() => setStep('config')} style={{ flex: 1, padding: '12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--card-bg)', cursor: 'pointer', fontSize: 14, color: 'var(--ink)' }}>{t.lesson.quiz.reconfigure}</button>
           <button onClick={startQuiz} disabled={starting} style={{ flex: 1, padding: '12px', background: 'var(--red)', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: starting ? 'wait' : 'pointer', opacity: starting ? 0.7 : 1 }}>{t.lesson.quiz.retry}</button>
         </div>
-        {starting && <LoadingOverlay label={t.lesson.quiz.preparing} />}
+        {starting && <LoadingIndicator variant="overlay" label={t.lesson.quiz.preparing} />}
       </div>
     );
   }

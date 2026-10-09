@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import HanziZoom from '@/app/components/HanziZoom';
 import NoteModal from '@/app/components/NoteModal';
+import { LoadingIndicator } from '@/app/components/LoadingIndicator';
 import { speakChinese } from '@/lib/speech';
 import type { SearchResultDTO } from '@/types/api';
 import { t } from '@/i18n';
@@ -66,7 +67,7 @@ export default function WordTranslationPopup({ word, anchor, onClose }: {
         <button type="button" autoFocus onClick={() => { onClose(); anchor.focus(); }} aria-label={t.common.hanziZoom.close}>×</button>
       </div>
       <div className="reading-word-popup-pinyin">{word.pinyin || result?.py}</div>
-      {status === 'loading' && <p role="status">{t.reading.word.lookingUp}</p>}
+      {status === 'loading' && <LoadingIndicator variant="inline" label={t.reading.word.lookingUp} />}
       {status === 'error' && <p role="status">{t.shell.sidebar.search.error}</p>}
       {result?.pos && <small>{result.pos}</small>}
       {result?.vn && <p>{result.vn}</p>}

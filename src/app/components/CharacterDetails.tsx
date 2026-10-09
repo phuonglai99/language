@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { CharacterDetailDTO } from '@/types/api';
 import { frequencyLabel } from '@/shared/hanzi';
 import { CharStroke } from './WordStroke';
+import { LoadingIndicator } from './LoadingIndicator';
 import { t } from '@/i18n';
 
 /** Detail content inside HanziModal, never a second popup. Remount when char changes. */
@@ -17,7 +18,7 @@ export default function CharacterDetails({ char }: { char: string }) {
       .catch(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [char]);
-  if (loading) return <p role="status">{t.common.loading}</p>;
+  if (loading) return <LoadingIndicator variant="inline" label={t.common.loading} />;
   if (!data) return <p>{t.lesson.kanjiPanel.noData}</p>;
   const labels = t.lesson.kanjiPanel;
   const fields = [

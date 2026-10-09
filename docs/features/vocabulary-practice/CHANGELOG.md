@@ -1,5 +1,10 @@
 # Lịch sử tính năng luyện từ vựng
 
+## v1 — 2026-10-08 — Đưa Luyện nhập ra sidebar
+
+- Thêm route riêng `/practice` và mục **Luyện nhập** ở đầu sidebar, kể cả khi sidebar đang thu gọn.
+- Bỏ tab Luyện nhập khỏi header từng bài học; màn cấu hình vẫn chọn được HSK 1–6 hoặc Ngẫu nhiên và tiếp tục dùng nguyên progress cục bộ.
+
 ## v1 — 2026-10-08 — Chuyển toàn bộ Notes anonymous sang localStorage
 
 - `NoteModal`, trang `/notes`, `/notes/[id]` và thư mục từ sai của Quiz đều dùng chung `hsk:notes:local:v1`; client không còn gọi Notes API.

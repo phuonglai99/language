@@ -7,10 +7,10 @@ import Link from 'next/link';
 import type { Lesson, VocabCard, BotuBlock } from '@/types';
 import QuizMode from './QuizMode';
 import MatchGame from './MatchGame';
-import PracticeMode from './PracticeMode';
 import NoteModal from '@/app/components/NoteModal';
 import { VocabListCard } from '@/app/components/VocabListCard';
 import { Pagination } from '@/app/components/Pagination';
+import { LoadingIndicator } from '@/app/components/LoadingIndicator';
 import WordStroke from '@/app/components/WordStroke';
 import { speakChinese } from '@/lib/speech';
 import { t } from '@/i18n';
@@ -47,19 +47,18 @@ function renderBotu(botu: BotuBlock[]) {
 
 // ─── Mode tab button ──────────────────────────────────────────────────────────
 
-type Mode = 'flash' | 'quiz' | 'match' | 'practice' | 'list';
+type Mode = 'flash' | 'quiz' | 'match' | 'list';
 
 const MODES: { key: Mode; icon: string; label: string }[] = [
   { key: 'list',  icon: '≡',  label: t.lesson.modes.list },
   { key: 'flash', icon: '卡', label: t.common.features.flashcard },
   { key: 'quiz',  icon: '测', label: t.common.features.quiz },
   { key: 'match', icon: '配', label: t.common.features.match },
-  { key: 'practice', icon: '写', label: t.practice.tab },
 ];
 
 function ModeTab({ m, active, onClick }: { m: typeof MODES[0]; active: boolean; onClick: () => void }) {
-  const colors: Record<string, string> = { list: '#3a8a5c', flash: 'var(--red)', quiz: 'var(--blue)', match: 'var(--gold)', practice: '#7b5ca8' };
-  const lightColors: Record<string, string> = { list: 'rgba(58,138,92,0.15)', flash: 'var(--red-light)', quiz: 'var(--blue-light)', match: 'var(--gold-light)', practice: 'rgba(123,92,168,0.15)' };
+  const colors: Record<string, string> = { list: '#3a8a5c', flash: 'var(--red)', quiz: 'var(--blue)', match: 'var(--gold)' };
+  const lightColors: Record<string, string> = { list: 'rgba(58,138,92,0.15)', flash: 'var(--red-light)', quiz: 'var(--blue-light)', match: 'var(--gold-light)' };
   return (
     <button onClick={onClick} style={{
       display: 'flex', alignItems: 'center', gap: 6,
@@ -87,7 +86,7 @@ export default function LessonPage() {
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [mode, setMode] = useState<Mode>(() => {
     const p = searchParams.get('mode');
-    return (p === 'quiz' || p === 'match' || p === 'practice' || p === 'list') ? p : 'flash';
+    return (p === 'quiz' || p === 'match' || p === 'list') ? p : 'flash';
   });
   const [idx, setIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
@@ -130,6 +129,7 @@ export default function LessonPage() {
     if (m === 'flash') url.searchParams.delete('mode'); else url.searchParams.set('mode', m);
     url.searchParams.delete('word');
     window.history.replaceState(null, '', `${url.pathname}${url.search}`);
+    window.dispatchEvent(new Event('hsk:navigation'));
     if (m === 'flash' && lesson) setQueue(shuffled ? shuffleArr(lesson.vocab) : [...lesson.vocab]);
   }
 
@@ -151,9 +151,7 @@ export default function LessonPage() {
   }, [mode, idx, queue, flipped, speak]);
 
   if (!lesson) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--ash)', gap: 10, fontSize: 14 }}>
-      <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 20 }}>汉</span> {t.common.loading}
-    </div>
+    <LoadingIndicator variant="page" label={t.common.loading} />
   );
 
   const card = queue[idx];
@@ -166,7 +164,7 @@ export default function LessonPage() {
         <div style={{ padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', gap: 14 }}>
 
           {/* Brand back link */}
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none', flexShrink: 0, opacity: 0.85 }} title={t.common.features.home}>
+          <Link href={`/vocab/${encodeURIComponent(lesson.level)}`} style={{ display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none', flexShrink: 0, opacity: 0.85 }} title={t.common.backToList}>
             <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 20, fontWeight: 700, color: '#f5f1e8', lineHeight: 1 }}>汉</span>
             <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.12em', color: 'rgba(200,191,176,0.4)', textTransform: 'uppercase' }}>{t.common.back}</span>
           </Link>
@@ -329,8 +327,6 @@ export default function LessonPage() {
         {/* MATCH GAME */}
         {mode === 'match' && <MatchGame vocab={lesson.vocab} lessonId={id} />}
 
-        {/* TYPING PRACTICE */}
-        {mode === 'practice' && <PracticeMode key={id} lessonId={id} />}
       </div>
 
       {/* KANJI PANEL */}

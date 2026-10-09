@@ -3,6 +3,7 @@ import HanziZoom from '@/app/components/HanziZoom';
 import { useState, useEffect, useTransition, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { LoadingIndicator } from '@/app/components/LoadingIndicator';
 import { t } from '@/i18n';
 
 type DictationLesson = {
@@ -191,7 +192,7 @@ function DictationPageInner() {
         </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>{t.common.loading}</div>
+          <LoadingIndicator label={t.common.loading} />
         ) : lessons.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)' }}>{t.common.emptyLessons}</div>
         ) : (
@@ -272,7 +273,7 @@ function DictationPageInner() {
 
 export default function DictationPage() {
   return (
-    <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--ash)' }}>{t.common.loading}</div>}>
+    <Suspense fallback={<LoadingIndicator variant="page" label={t.common.loading} />}>
       <DictationPageInner />
     </Suspense>
   );

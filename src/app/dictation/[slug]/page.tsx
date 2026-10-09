@@ -15,6 +15,7 @@ import { shouldIgnorePageShortcut } from '@/lib/keyboard';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { LoadingIndicator } from '@/app/components/LoadingIndicator';
 
 type Lesson = {
   slug: string;
@@ -356,7 +357,7 @@ function DictationSession({ slug }: { slug: string }) {
   useEffect(() => {
     const position = sentences.findIndex(sentence => sentence.index === study.currentSentenceIndex);
     const element = rightPanelRef.current?.querySelector(`[data-sentence="${position}"]`);
-    element?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    element?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, [sentences, study.currentSentenceIndex]);
 
   const currentPosition = Math.max(0, sentences.findIndex(sentence => sentence.index === study.currentSentenceIndex));
@@ -574,7 +575,7 @@ function DictationSession({ slug }: { slug: string }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [togglePlay, replayAudio, checkAnswer, toggleSentenceHint, changeSentence, currentPosition, sentences.length]);
 
-  if (loading) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--paper)', color: 'var(--ash)' }}>{t.common.loading}</div>;
+  if (loading) return <LoadingIndicator variant="page" label={t.common.loading} />;
   if (notFound || !lesson) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--paper)', gap: 16 }}>
     <div>{t.dictation.practice.notFound}</div><Link href="/dictation">{t.common.backToList}</Link>
   </div>;
@@ -714,7 +715,7 @@ function DictationSession({ slug }: { slug: string }) {
           </section>
         </main>
 
-        <aside style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <aside style={{ position: 'sticky', top: 54, height: 'calc(100vh - 54px)', padding: '24px 0', display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--ash)' }}>{t.dictation.practice.board}</span><ScoreBar pct={scorePercent} /></div>
           <div ref={rightPanelRef} style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {sentences.map((sentence, position) => {
@@ -722,7 +723,7 @@ function DictationSession({ slug }: { slug: string }) {
               const submission = study.submissions[key];
               const active = position === currentPosition;
               const border = active ? levelColor : submission?.result.is_perfect ? '#16a34a' : submission ? '#dc2626' : 'var(--border)';
-              return <button key={sentence.index} data-sentence={position} onClick={() => changeSentence(position)} style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 8, border: `1.5px solid ${border}`, background: active ? 'var(--paper-alt)' : 'var(--card-bg)', cursor: 'pointer' }}>
+              return <button key={sentence.index} data-sentence={position} aria-current={active ? 'step' : undefined} onClick={() => changeSentence(position)} style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 8, border: `1.5px solid ${border}`, background: active ? 'var(--paper-alt)' : 'var(--card-bg)', boxShadow: active ? `0 0 0 2px ${levelColor}22` : 'none', cursor: 'pointer', flexShrink: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--ash)' }}>#{sentence.index + 1}</span>{study.hintUsed[key] && <span style={{ color: '#dc2626', fontSize: 9 }}>{t.dictation.practice.hintUsed}</span>}</div>
                 {submission ? <div style={{ marginTop: 5, color: submission.result.is_perfect ? '#16a34a' : '#dc2626', fontSize: 12 }}>{submission.result.is_perfect ? '✓' : '✗'} {submission.input}</div> : <div style={{ marginTop: 5, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace' }}>{sentence.tokens.map(token => token.scorable ? normalizeDictationInput(token.text).split('').map(char => /^[0-9]$/.test(char) ? '*' : '*').join('') : token.text).join('')}</div>}
               </button>;

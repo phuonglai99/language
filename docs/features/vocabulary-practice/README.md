@@ -10,7 +10,7 @@ Trạng thái: **đã triển khai code v1, đang chờ kiểm thử IME thủ c
 | Nhìn chữ Hán → trả lời | Dùng bộ gõ tiếng Trung chọn chữ Hán | 学校 → `学校` | Làm quen bộ gõ, đối chiếu và chọn chữ |
 | Nhìn nghĩa tiếng Việt → trả lời | Dùng bộ gõ tiếng Trung chọn chữ Hán | trường học → `学校` | Chủ động nhớ từ theo nghĩa |
 
-Đây là **hai tính năng**, trong đó tính năng nhìn chữ Hán có **hai chế độ nhập**. Điểm của ba dạng bài được theo dõi riêng trong tab **Luyện nhập** tại `/lesson/[id]`. Chép chính tả nghe → chữ Hán vẫn thuộc [dictation](../dictation.md).
+Đây là **hai tính năng**, trong đó tính năng nhìn chữ Hán có **hai chế độ nhập**. Điểm của ba dạng bài được theo dõi riêng tại **Luyện nhập** (`/practice`), truy cập trực tiếp từ sidebar. Chép chính tả nghe → chữ Hán vẫn thuộc [dictation](../dictation.md).
 
 Ở màn cấu hình, người học chọn HSK 1–6 hoặc **Ngẫu nhiên**. Một cấp HSK chỉ lấy từ đúng cấp đó; Ngẫu nhiên dùng toàn bộ kho từ HSK 1–6 trong DB. Khi bắt đầu phiên, danh sách được xáo và lấy theo số lượng 10/20/30/tất cả đã chọn.
 

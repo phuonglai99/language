@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { VocabListCard } from '@/app/components/VocabListCard';
 import { Pagination } from '@/app/components/Pagination';
 import { SpeechSettings } from '@/app/components/SpeechSettings';
+import { LoadingIndicator } from '@/app/components/LoadingIndicator';
 import { t } from '@/i18n';
 
 interface VocabItem {
@@ -90,7 +91,7 @@ function VocabLevelContent({ level }: { level: string }) {
       <main style={{ maxWidth: 900, margin: '0 auto', padding: '24px 24px 80px' }}>
         <SpeechSettings />
         {loading && (
-          <div style={{ textAlign: 'center', padding: '80px 0', color: '#9ca3af', fontSize: 14 }}>{t.common.loading}</div>
+          <LoadingIndicator label={t.common.loading} />
         )}
 
         {error && <p role="alert" style={{ textAlign: 'center', color: 'var(--ash)' }}>{t.vocab.level.loadError}</p>}

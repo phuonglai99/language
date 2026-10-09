@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, type CSSProperties }
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { locateSentenceSpans } from '@/lib/dictation';
+import { LoadingIndicator } from '@/app/components/LoadingIndicator';
 import { t } from '@/i18n';
 
 type AlignSentence = {
@@ -405,11 +406,7 @@ export default function AlignEditorPage() {
   }, [lesson, sentences]);
 
   if (loading) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>
-        {t.common.loading}
-      </div>
-    );
+    return <LoadingIndicator variant="page" label={t.common.loading} />;
   }
 
   if (notFound || !lesson) {

@@ -4,7 +4,6 @@ export const home = {
     lessonsUnit: 'bài học',
     vocabUnit: 'từ vựng',
     importButton: '+ Import bài học',
-    uploadingButton: (progress: string) => `⏳ ${progress}`,
   },
   upload: {
     readingExcel: 'Đang đọc file Excel...',

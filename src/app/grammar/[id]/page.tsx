@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { Lesson, GrammarPoint, Exercise, Comparison } from '@/types';
+import { LoadingIndicator } from '@/app/components/LoadingIndicator';
 import { t } from '@/i18n';
 
 function ExerciseItem({ ex, idx }: { ex: Exercise; idx: number }) {
@@ -151,14 +152,14 @@ export default function GrammarPage() {
     g.title.toLowerCase().includes(q) || g.titleVn.toLowerCase().includes(q)
   ) : lesson.grammar) : [];
 
-  if (!lesson) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--ash)' }}>{t.common.loading}</div>;
+  if (!lesson) return <LoadingIndicator variant="page" label={t.common.loading} />;
 
   return (
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
       {/* ── HEADER ── */}
       <header style={{ background: '#1e3a8a', position: 'sticky', top: 0, zIndex: 50, boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>
         <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', gap: 14 }}>
-          <Link href="/" style={{ textDecoration: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 13, flexShrink: 0, transition: 'color 0.15s' }}
+          <Link href={`/grammar/hsk/${encodeURIComponent(lesson.level)}`} style={{ textDecoration: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 13, flexShrink: 0, transition: 'color 0.15s' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
             onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}>{t.common.back}</Link>
           <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.12)', flexShrink: 0 }} />
