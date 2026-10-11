@@ -1,14 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { listNoteFolders, createNoteFolder } from '@/server';
+import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
-export async function GET() {
-  return NextResponse.json({ folders: await listNoteFolders() });
-}
+const localOnly = () => NextResponse.json({ error: 'Anonymous notes are stored in localStorage.' }, { status: 410 });
 
-export async function POST(req: NextRequest) {
-  const { name } = await req.json();
-  if (!name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 });
-  return NextResponse.json({ folder: await createNoteFolder(name) });
-}
+export const GET = localOnly;
+export const POST = localOnly;

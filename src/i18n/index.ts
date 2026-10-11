@@ -18,7 +18,8 @@ import { lesson } from './vi/lesson';
 import { notes } from './vi/notes';
 import { reading } from './vi/reading';
 import { dictation } from './vi/dictation';
+import { practice } from './vi/practice';
 
-export const t = { common, home, shell, vocab, grammar, api, lesson, notes, reading, dictation } as const;
+export const t = { common, home, shell, vocab, grammar, api, lesson, notes, reading, dictation, practice } as const;
 
 export type Messages = typeof t;

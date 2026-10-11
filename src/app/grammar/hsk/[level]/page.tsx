@@ -1,9 +1,11 @@
 'use client';
+import HanziZoom from '@/app/components/HanziZoom';
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { HanziiGrammar } from '@/types';
 import { Pagination } from '@/app/components/Pagination';
+import { LoadingIndicator } from '@/app/components/LoadingIndicator';
 import { UNLEVELED_LABEL } from '@/shared/grammar';
 import { t } from '@/i18n';
 
@@ -27,7 +29,7 @@ function GrammarSection({
     <div ref={sectionRef} style={{ border: '1px solid var(--border)', borderRadius: 10, marginBottom: 12, overflow: 'hidden', background: 'var(--card-bg)' }}>
       <button onClick={onToggle} style={{ width: '100%', padding: '18px 22px', background: open ? 'var(--primary-light)' : 'var(--card-bg)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, textAlign: 'left' }}>
         <div>
-          <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 17, fontWeight: 700, color: open ? 'var(--primary)' : 'var(--ink)', marginBottom: 2 }}>{g.title}</div>
+          <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 17, fontWeight: 700, color: open ? 'var(--primary)' : 'var(--ink)', marginBottom: 2 }}><HanziZoom text={g.title} /></div>
           <div style={{ fontSize: 12, color: open ? 'var(--primary)' : 'var(--ash)' }}>{g.titleVn}</div>
         </div>
         <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 18, color: open ? 'var(--primary)' : 'var(--ash-light)', flexShrink: 0, marginTop: 2 }}>{open ? '−' : '+'}</div>
@@ -37,7 +39,7 @@ function GrammarSection({
         <div style={{ padding: '0 22px 22px', borderTop: '1px solid var(--border)' }}>
           {g.formula && (
             <div style={{ margin: '18px 0 14px', padding: '12px 18px', background: 'var(--red-light)', border: '1px solid var(--red)', borderRadius: 6, fontFamily: 'Noto Serif SC, serif', fontSize: 16, color: 'var(--red)', fontWeight: 600 }}>
-              {g.formula}
+              <HanziZoom text={g.formula} />
             </div>
           )}
           {g.useFor && g.useFor !== g.titleVn && (
@@ -52,7 +54,7 @@ function GrammarSection({
               <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ash-light)', marginBottom: 10 }}>{t.grammar.section.examples}</div>
               {g.examples.map((ex, i) => (
                 <div key={i} style={{ padding: '10px 14px', background: 'var(--paper-alt)', border: '1px solid var(--border)', borderRadius: 6, marginBottom: 6 }}>
-                  <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 15, color: 'var(--ink)', marginBottom: 3 }}>{ex.zh}</div>
+                  <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 15, color: 'var(--ink)', marginBottom: 3 }}><HanziZoom text={ex.zh} /></div>
                   {ex.note && <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--primary)', marginBottom: 3 }}>{ex.note}</div>}
                   {ex.vn && <div style={{ fontSize: 12.5, color: 'var(--ash)', fontStyle: 'italic' }}>{ex.vn}</div>}
                 </div>
@@ -68,6 +70,10 @@ function GrammarSection({
 export default function HanziiGrammarLevelPage() {
   const params = useParams();
   const level = decodeURIComponent(params.level as string);
+  return <GrammarLevelContent key={level} level={level} />;
+}
+
+function GrammarLevelContent({ level }: { level: string }) {
   const [items, setItems] = useState<HanziiGrammar[]>([]);
   const [loading, setLoading] = useState(true);
   const [openIdx, setOpenIdx] = useState<number | null>(0);
@@ -76,7 +82,6 @@ export default function HanziiGrammarLevelPage() {
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
-    setLoading(true);
     fetch(`/api/grammar?level=${encodeURIComponent(level)}`)
       .then(r => r.json())
       .then(d => { setItems(d.items ?? []); setLoading(false); setOpenIdx(0); setPage(1); });
@@ -109,7 +114,7 @@ export default function HanziiGrammarLevelPage() {
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
       <header style={{ background: '#1e3a8a', position: 'sticky', top: 0, zIndex: 50, boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>
         <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', gap: 14 }}>
-          <Link href="/" style={{ textDecoration: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 13, flexShrink: 0, transition: 'color 0.15s' }}
+          <Link href="/grammar" style={{ textDecoration: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 13, flexShrink: 0, transition: 'color 0.15s' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
             onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}>{t.common.back}</Link>
           <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.12)', flexShrink: 0 }} />
@@ -156,7 +161,7 @@ export default function HanziiGrammarLevelPage() {
 
       <main style={{ maxWidth: 900, margin: '0 auto', padding: '24px 24px 80px' }}>
         {loading && (
-          <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--ash)', fontSize: 14 }}>{t.common.loading}</div>
+          <LoadingIndicator label={t.common.loading} />
         )}
 
         {!loading && pageItems.map((g, i) => (

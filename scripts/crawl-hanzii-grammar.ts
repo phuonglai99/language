@@ -11,7 +11,7 @@
  */
 import { getDb } from '../src/server/db/connection';
 import { knownHanziiGrammarUids, saveHanziiGrammarPoint } from '../src/server/repos/grammar';
-import { searchHanziiGrammar } from '../src/server/services/hanzii';
+import { searchHanziiGrammar } from '../src/server/third-party-service/hanzii';
 
 const LEVEL_KEYS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', '高等', 'Li hợp', 'Dịch', 'HSK1', 'HSK2', 'HSK3', 'HSK4', 'HSK5', 'HSK6'];
 const EXTRA_SEEDS = ['的', '了', '是', '在', '不', '有', '把', '被', '得', '着', '过', '吗', '呢', '吧', '比', '从', '对', '给', '还', '很',

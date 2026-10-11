@@ -3,31 +3,35 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { t } from '@/i18n';
-
-interface NoteFolder { id: string; name: string; isSystem: boolean; createdAt: string; itemCount: number; }
+import {
+  LOCAL_NOTES_CHANGED_EVENT, LOCAL_NOTES_MAX_ITEMS, LOCAL_NOTES_SAFE_LIMIT_BYTES, LOCAL_NOTES_STORAGE_KEY, createLocalNoteFolder,
+  listLocalNoteFolders, localNotesUsage, type LocalNoteFolderWithCount,
+} from '@/lib/localNotes';
 
 export default function NotesPage() {
   const router = useRouter();
-  const [folders, setFolders] = useState<NoteFolder[]>([]);
+  const [folders, setFolders] = useState<LocalNoteFolderWithCount[]>([]);
+  const [usage, setUsage] = useState({ usedBytes: 0, limitBytes: LOCAL_NOTES_SAFE_LIMIT_BYTES, percent: 0, itemCount: 0, maxItems: LOCAL_NOTES_MAX_ITEMS });
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
 
   useEffect(() => {
-    fetch('/api/notes/folders').then(r => r.json()).then(d => setFolders(d.folders ?? []));
+    const load = () => { setFolders(listLocalNoteFolders()); setUsage(localNotesUsage()); };
+    const onStorage = (event: StorageEvent) => { if (event.key === LOCAL_NOTES_STORAGE_KEY) load(); };
+    const onLocalChange = () => { load(); };
+    load();
+    window.addEventListener('storage', onStorage);
+    window.addEventListener(LOCAL_NOTES_CHANGED_EVENT, onLocalChange);
+    return () => { window.removeEventListener('storage', onStorage); window.removeEventListener(LOCAL_NOTES_CHANGED_EVENT, onLocalChange); };
   }, []);
 
-  async function createFolder() {
+  function createFolder() {
     if (!newFolderName.trim()) return;
-    const r = await fetch('/api/notes/folders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newFolderName }),
-    });
-    const d = await r.json();
-    setFolders(f => [...f, d.folder]);
+    const folder = createLocalNoteFolder(newFolderName);
+    if (!folder) return;
     setNewFolderName('');
     setCreatingFolder(false);
-    router.push(`/notes/${d.folder.id}`);
+    router.push(`/notes/${folder.id}`);
   }
 
   return (
@@ -67,6 +71,10 @@ export default function NotesPage() {
       </header>
 
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 24px' }}>
+        <div style={{ marginBottom: 20, padding: '12px 14px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--paper-alt)', color: 'var(--ash)', fontSize: 12.5 }}>
+          <div>{t.notes.local.summary(usage.itemCount, usage.maxItems, formatBytes(usage.usedBytes))}</div>
+          <div style={{ height: 5, marginTop: 8, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}><div style={{ width: `${usage.percent}%`, height: '100%', background: usage.percent >= 85 ? 'var(--red)' : 'var(--blue)' }} /></div>
+        </div>
         {folders.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--ash)' }}>
             <div style={{ fontSize: 56, marginBottom: 16 }}>📁</div>
@@ -88,6 +96,7 @@ export default function NotesPage() {
                   <div style={{ padding: '28px 24px 20px', background: 'var(--paper-alt)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
                     <span style={{ fontSize: 40 }}>{f.isSystem ? '⚠️' : '📁'}</span>
                     <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--ink)', textAlign: 'center' }}>{f.name}</span>
+                    <span style={{ fontSize: 10, color: 'var(--blue)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em' }}>{t.notes.local.onDevice}</span>
                   </div>
                   {/* Card bottom */}
                   <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -104,4 +113,9 @@ export default function NotesPage() {
       </div>
     </div>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} MiB`;
 }

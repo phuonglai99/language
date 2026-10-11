@@ -1,5 +1,6 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import HanziZoom from '@/app/components/HanziZoom';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import type { VocabCard } from '@/types';
@@ -7,13 +8,14 @@ import { Pagination } from '@/app/components/Pagination';
 import QuizMode from '../../lesson/[id]/QuizMode';
 import { speakChinese } from '@/lib/speech';
 import { t } from '@/i18n';
-
-interface NoteFolder { id: string; name: string; isSystem: boolean; createdAt: string; itemCount: number; }
-interface NoteItem { id: string; folderId: string; zh: string; py: string; vn: string; pos: string; sourceLessonId: string | null; createdAt: string; }
+import {
+  LOCAL_NOTES_CHANGED_EVENT, LOCAL_NOTES_STORAGE_KEY, deleteLocalNoteFolder, deleteLocalNoteItem, deleteLocalNoteItems, getLocalNoteFolder,
+  listLocalNoteItems, renameLocalNoteFolder, type LocalNoteFolderWithCount, type LocalNoteItem,
+} from '@/lib/localNotes';
 
 const speak = (text: string) => { speakChinese(text); };
 
-function noteItemToVocabCard(item: NoteItem): VocabCard {
+function noteItemToVocabCard(item: LocalNoteItem): VocabCard {
   return { id: item.id, zh: item.zh, py: item.py, vn: item.vn, pos: item.pos, botu: [], ex: { zh: '', vn: '' } };
 }
 
@@ -22,10 +24,13 @@ type Mode = null | 'select' | 'quiz-pick';
 
 export default function NotesFolderPage() {
   const { id } = useParams<{ id: string }>();
+  return <NotesFolderContent key={id} id={id} />;
+}
+
+function NotesFolderContent({ id }: { id: string }) {
   const router = useRouter();
-  const [folder, setFolder] = useState<NoteFolder | null>(null);
-  const [items, setItems] = useState<NoteItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [folder, setFolder] = useState<LocalNoteFolderWithCount | null>(null);
+  const [items, setItems] = useState<LocalNoteItem[]>([]);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState('');
   const [confirmDeleteFolder, setConfirmDeleteFolder] = useState(false);
@@ -38,27 +43,24 @@ export default function NotesFolderPage() {
   const NOTES_PAGE_SIZE = 24;
 
   useEffect(() => {
-    fetch('/api/notes/folders')
-      .then(r => r.json())
-      .then(d => {
-        const f = (d.folders ?? []).find((x: NoteFolder) => x.id === id);
-        setFolder(f ?? null);
-      });
+    const load = () => {
+      setFolder(getLocalNoteFolder(id));
+      setItems(listLocalNoteItems(id));
+    };
+    const onStorage = (event: StorageEvent) => { if (event.key === LOCAL_NOTES_STORAGE_KEY) load(); };
+    load();
+    window.addEventListener('storage', onStorage);
+    window.addEventListener(LOCAL_NOTES_CHANGED_EVENT, load);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener(LOCAL_NOTES_CHANGED_EVENT, load);
+    };
   }, [id]);
-
-  const loadItems = useCallback(() => {
-    setLoading(true);
-    fetch(`/api/notes/items?folderId=${id}`)
-      .then(r => r.json())
-      .then(d => { setItems(d.items ?? []); setLoading(false); });
-  }, [id]);
-
-  useEffect(() => { loadItems(); }, [loadItems]);
 
   function exitMode() { setMode(null); setSelected(new Set()); setConfirmDeleteSelected(false); }
 
   function toggleItem(itemId: string) {
-    setSelected(s => { const n = new Set(s); n.has(itemId) ? n.delete(itemId) : n.add(itemId); return n; });
+    setSelected(s => { const n = new Set(s); if (n.has(itemId)) n.delete(itemId); else n.add(itemId); return n; });
   }
 
   const allSelected = items.length > 0 && selected.size === items.length;
@@ -67,27 +69,27 @@ export default function NotesFolderPage() {
     else setSelected(new Set(items.map(i => i.id)));
   }
 
-  async function renameFolder() {
+  function renameFolder() {
     if (!renameVal.trim() || !folder) { setRenamingId(null); return; }
-    await fetch(`/api/notes/folders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: renameVal }) });
+    renameLocalNoteFolder(id, renameVal);
     setFolder(f => f ? { ...f, name: renameVal.trim() } : f);
     setRenamingId(null);
   }
 
-  async function deleteFolder() {
-    await fetch(`/api/notes/folders/${id}`, { method: 'DELETE' });
+  function deleteFolder() {
+    deleteLocalNoteFolder(id);
     router.push('/notes');
   }
 
-  async function deleteItem(itemId: string) {
-    await fetch(`/api/notes/items/${itemId}`, { method: 'DELETE' });
+  function deleteItem(itemId: string) {
+    deleteLocalNoteItem(itemId);
     setItems(i => i.filter(x => x.id !== itemId));
     setFolder(f => f ? { ...f, itemCount: Math.max(0, f.itemCount - 1) } : f);
     setConfirmDeleteItem(null);
   }
 
-  async function deleteSelected() {
-    await Promise.all([...selected].map(itemId => fetch(`/api/notes/items/${itemId}`, { method: 'DELETE' })));
+  function deleteSelected() {
+    deleteLocalNoteItems(selected);
     const removed = selected.size;
     setItems(i => i.filter(x => !selected.has(x.id)));
     setFolder(f => f ? { ...f, itemCount: Math.max(0, f.itemCount - removed) } : f);
@@ -113,7 +115,7 @@ export default function NotesFolderPage() {
   }
 
   // ── Header right buttons ───────────────────────────────────────────────────
-  function HeaderActions() {
+  function renderHeaderActions() {
     if (items.length === 0) return null;
 
     if (mode === null) return (
@@ -183,6 +185,7 @@ export default function NotesFolderPage() {
           ) : (
             <span style={{ fontSize: 14, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
               {folder?.isSystem ? '⚠️' : '📁'} {folder?.name ?? '…'}
+              {folder?.isLocal && <span style={{ marginLeft: 8, fontSize: 9, textTransform: 'uppercase', letterSpacing: '.08em', color: 'rgba(255,255,255,.65)' }}>{t.notes.local.onDevice}</span>}
             </span>
           )}
 
@@ -211,7 +214,7 @@ export default function NotesFolderPage() {
           )}
 
           <div style={{ marginLeft: 'auto', flexShrink: 0 }}>
-            <HeaderActions />
+            {renderHeaderActions()}
           </div>
         </div>
 
@@ -233,16 +236,14 @@ export default function NotesFolderPage() {
           <p style={{ fontSize: 13, color: 'var(--ash)', marginBottom: 20 }}>{t.notes.folder.itemCount(items.length)}</p>
         )}
 
-        {loading && <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--ash)' }}>{t.common.loading}</div>}
-
-        {!loading && items.length === 0 && (
+        {items.length === 0 && (
           <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--ash)' }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>📝</div>
             <p style={{ fontSize: 14 }}>{t.notes.folder.emptyTitle}<br />{t.notes.folder.emptyHint}</p>
           </div>
         )}
 
-        {!loading && items.length > 0 && (() => {
+        {items.length > 0 && (() => {
           const totalNotesPages = Math.max(1, Math.ceil(items.length / NOTES_PAGE_SIZE));
           const curNotesPage = Math.min(notesPage, totalNotesPages);
           const pageItems = mode !== null ? items : items.slice((curNotesPage - 1) * NOTES_PAGE_SIZE, curNotesPage * NOTES_PAGE_SIZE);
@@ -277,10 +278,11 @@ export default function NotesFolderPage() {
                     {item.pos && (
                       <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--ash-light)', background: 'var(--border)', padding: '1px 5px', borderRadius: 3 }}>{item.pos}</span>
                     )}
-                    <button onClick={e => { e.stopPropagation(); speak(item.zh); }}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1 }}>
-                      <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 44, fontWeight: 700, color: 'var(--ink)' }}>{item.zh}</span>
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 44, fontWeight: 700, color: 'var(--ink)' }}><HanziZoom text={item.zh} pinyin={item.py} meaning={item.vn} /></span>
+                      <button type="button" aria-label={t.common.speak} onClick={e => { e.stopPropagation(); speak(item.zh); }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 8 }}>🔊</button>
+                    </div>
                     <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--blue)' }}>{item.py}</span>
                   </div>
 
@@ -336,7 +338,7 @@ export default function NotesFolderPage() {
 }
 
 // ── Button helpers ─────────────────────────────────────────────────────────────
-function Btn({ children, onClick, primary, danger, ghost, disabled }: {
+function Btn({ children, onClick, primary, danger, disabled }: {
   children: React.ReactNode; onClick?: () => void;
   primary?: boolean; danger?: boolean; ghost?: boolean; disabled?: boolean;
 }) {

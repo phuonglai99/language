@@ -1,8 +1,11 @@
 'use client';
+import { shouldIgnorePageShortcut } from '@/lib/keyboard';
+import HanziZoom from '@/app/components/HanziZoom';
 import { useState, useEffect, useRef, useCallback, useMemo, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { locateSentenceSpans } from '@/lib/dictation';
+import { LoadingIndicator } from '@/app/components/LoadingIndicator';
 import { t } from '@/i18n';
 
 type AlignSentence = {
@@ -342,14 +345,13 @@ export default function AlignEditorPage() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (shouldIgnorePageShortcut(e) || e.altKey) return;
       if ((e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
         if (!saving) void save();
         return;
       }
-      const tag = (e.target as HTMLElement).tagName;
-      const inField = tag === 'INPUT' || tag === 'TEXTAREA';
-      if (inField) return;
+      if (e.ctrlKey || e.metaKey) return;
       if (e.key === ' ') {
         e.preventDefault();
         playPause();
@@ -404,11 +406,7 @@ export default function AlignEditorPage() {
   }, [lesson, sentences]);
 
   if (loading) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>
-        {t.common.loading}
-      </div>
-    );
+    return <LoadingIndicator variant="page" label={t.common.loading} />;
   }
 
   if (notFound || !lesson) {
@@ -439,7 +437,7 @@ export default function AlignEditorPage() {
             HSK {lesson.hsk_level}
           </span>
           <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 14, color: '#f5f1e8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-            {lesson.title_zh_simplified}
+            <HanziZoom text={lesson.title_zh_simplified} />
           </span>
           <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'rgba(200,191,176,0.5)', flexShrink: 0 }}>
             {t.dictation.align.editor.headerStats(doneCount, sentences.length, textCount)}
@@ -581,7 +579,7 @@ export default function AlignEditorPage() {
                       >✕</button>
                     </div>
                     <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 15, color: 'var(--ink)', lineHeight: 1.5 }}>
-                      {s.hanzi || <span style={{ color: 'var(--ash-light)', fontStyle: 'italic' }}>{t.dictation.align.editor.noText}</span>}
+                      {s.hanzi ? <HanziZoom text={s.hanzi} /> : <span style={{ color: 'var(--ash-light)', fontStyle: 'italic' }}>{t.dictation.align.editor.noText}</span>}
                     </div>
                     {s.pinyin ? (
                       <div style={{ fontFamily: 'Be Vietnam Pro, sans-serif', fontSize: 12, color: 'var(--ash)', marginTop: 4, lineHeight: 1.45 }}>
@@ -653,6 +651,7 @@ export default function AlignEditorPage() {
                 {t.dictation.align.editor.assignSelection(currentIndex + 1)}
               </button>
             </div>
+            <div style={{ fontSize: 13 }}><HanziZoom text={rawText}>⤢ {t.common.hanziZoom.title}</HanziZoom></div>
             <div
               ref={rawRef}
               onMouseUp={e => {

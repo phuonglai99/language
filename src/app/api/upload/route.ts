@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extractSegmentsFromDocx, parseHskXlsx } from '@/lib/parse-docx';
-import { analyzeLesson } from '@/lib/claude';
+import { analyzeLesson } from '@/server/third-party-service/claude';
 import { importLesson, importWordLists } from '@/server';
 import { t } from '@/i18n';
 

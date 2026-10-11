@@ -1,7 +1,13 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import HanziZoom from '@/app/components/HanziZoom';
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import type { VocabCard } from '@/types';
 import { t } from '@/i18n';
+
+function subscribeScore(onChange: () => void) {
+  window.addEventListener('storage', onChange);
+  return () => window.removeEventListener('storage', onChange);
+}
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -33,24 +39,25 @@ export default function MatchGame({ vocab, lessonId }: MatchGameProps) {
   const [wrong, setWrong] = useState<[string, string] | null>(null);
   const [gameState, setGameState] = useState<'ready' | 'playing' | 'round-done' | 'done'>('ready');
   const [elapsed, setElapsed] = useState(0);
-  const [highscore, setHighscore] = useState<number | null>(null);
+  const [newHighscore, setHighscore] = useState<number | null>(null);
   const [isNewRecord, setIsNewRecord] = useState(false);
   const [round, setRound] = useState(0);
   const [roundElapsed, setRoundElapsed] = useState(0);
   const shuffledVocabRef = useRef<VocabCard[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef(0);
-  const totalElapsedRef = useRef(0);
+  const [totalElapsed, setTotalElapsed] = useState(0);
   const storageKey = `match-hs-${lessonId}`;
 
   const totalRounds = Math.ceil(vocab.length / PAIR_COUNT);
 
-  useEffect(() => {
+  const storedHighscore = useSyncExternalStore(subscribeScore, () => {
     try {
-      const v = localStorage.getItem(storageKey);
-      if (v) setHighscore(parseInt(v));
-    } catch { /* ignore */ }
-  }, [storageKey]);
+      const value = Number(localStorage.getItem(storageKey));
+      return Number.isFinite(value) && value > 0 ? value : null;
+    } catch { return null; }
+  }, () => null);
+  const highscore = newHighscore ?? storedHighscore;
 
   function buildCards(pairs: VocabCard[]): Card[] {
     const result: Card[] = [];
@@ -75,7 +82,7 @@ export default function MatchGame({ vocab, lessonId }: MatchGameProps) {
 
   function startGame() {
     shuffledVocabRef.current = shuffle([...vocab]);
-    totalElapsedRef.current = 0;
+    setTotalElapsed(0);
     setRound(0);
     setIsNewRecord(false);
     beginRound(0);
@@ -98,7 +105,7 @@ export default function MatchGame({ vocab, lessonId }: MatchGameProps) {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [gameState]);
 
-  function selectCard(card: Card) {
+  function selectCard(card: Card, selectedAt: number) {
     if (gameState !== 'playing') return;
     if (matched.has(card.pairId)) return;
     if (wrong) return;
@@ -116,13 +123,13 @@ export default function MatchGame({ vocab, lessonId }: MatchGameProps) {
 
       const totalPairs = cards.length / 2;
       if (next.size >= totalPairs) {
-        const rt = Math.floor((Date.now() - startRef.current) / 1000);
+        const rt = Math.floor((selectedAt - startRef.current) / 1000);
         setElapsed(rt);
         setRoundElapsed(rt);
-        totalElapsedRef.current += rt;
+        const finalTime = totalElapsed + rt;
+        setTotalElapsed(finalTime);
 
         if (round + 1 >= totalRounds) {
-          const finalTime = totalElapsedRef.current;
           setGameState('done');
           try {
             const stored = localStorage.getItem(storageKey);
@@ -226,7 +233,7 @@ export default function MatchGame({ vocab, lessonId }: MatchGameProps) {
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%' }}>
         {[
-          [totalRounds > 1 ? t.lesson.match.totalTime : t.lesson.match.time, fmt(totalElapsedRef.current), 'var(--gold)'],
+          [totalRounds > 1 ? t.lesson.match.totalTime : t.lesson.match.time, fmt(totalElapsed), 'var(--gold)'],
           [t.lesson.match.record, highscore !== null ? fmt(highscore) : '--', 'var(--ash)'],
         ].map(([label, value, color]) => (
           <div key={label} style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 12px', textAlign: 'center' }}>
@@ -292,12 +299,12 @@ export default function MatchGame({ vocab, lessonId }: MatchGameProps) {
           else if (isWrong) { borderColor = 'var(--red)'; bgColor = 'var(--red-light)'; textColor = 'var(--red)'; }
 
           return (
+            <div key={card.id} style={{ position: 'relative' }}>
             <button
-              key={card.id}
-              onClick={() => selectCard(card)}
+              onClick={() => selectCard(card, Date.now())}
               disabled={isMatched}
               style={{
-                padding: '10px 6px',
+                padding: '10px 6px', width: '100%', height: '100%',
                 minHeight: card.type === 'word' ? 80 : 68,
                 border: `2px solid ${borderColor}`,
                 borderRadius: 8,
@@ -318,6 +325,10 @@ export default function MatchGame({ vocab, lessonId }: MatchGameProps) {
             >
               {card.content}
             </button>
+            {card.type === 'word' && !isMatched && <span style={{ position: 'absolute', top: 2, right: 6, fontSize: 20 }}>
+              <HanziZoom text={card.content}>⤢</HanziZoom>
+            </span>}
+            </div>
           );
         })}
       </div>

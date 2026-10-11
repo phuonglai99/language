@@ -1,18 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { renameNoteFolder, deleteNoteFolder } from '@/server';
+import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const { name } = await req.json();
-  if (!name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 });
-  await renameNoteFolder(id, name);
-  return NextResponse.json({ ok: true });
-}
+const localOnly = () => NextResponse.json({ error: 'Anonymous notes are stored in localStorage.' }, { status: 410 });
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  await deleteNoteFolder(id);
-  return NextResponse.json({ ok: true });
-}
+export const PATCH = localOnly;
+export const DELETE = localOnly;

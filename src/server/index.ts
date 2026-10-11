@@ -10,5 +10,6 @@ export * from './repos/grammar';
 export * from './repos/passages';
 export * from './repos/characters';
 export * from './repos/vocab';
+export * from './repos/vocabularyPractice';
 export * from './services/lessonImport';
 export * from './services/mandarinBean';

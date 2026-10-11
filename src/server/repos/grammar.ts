@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { getDb } from '../db/connection';
-import type { HanziiGrammarItem } from '../services/hanzii';
+import type { HanziiGrammarItem } from '../third-party-service/hanzii';
 import { hanziiLevel, parseHanziiContents } from '@/shared/grammarParse';
 import { grammarLevelLabel, parseGrammarLevel } from '@/shared/grammar';
 import type { HanziiGrammar } from '@/types';

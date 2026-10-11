@@ -1,5 +1,11 @@
 # Logic tính năng — HSK Web
 
+## Kế hoạch tính năng mới
+
+- [Luyện từ vựng hai hướng — v1](vocabulary-practice/README.md): nhìn chữ Hán (nhập pinyin có số thanh hoặc gõ Hán tự) và nhìn nghĩa tiếng Việt → gõ Hán tự. Có kế hoạch chi tiết và lịch sử phiên bản; **chưa triển khai**.
+
+## Tài liệu hiện có
+
 > **Lưu ý (2026-10-03):** các file trong thư mục này mô tả code **trước** DB v4 (`src/lib/db.ts`, các bảng `lessons`/`kanji`/`mb_lessons`…). Kiến trúc hiện tại ở [../ARCHITECTURE.md](../ARCHITECTURE.md) và [../data-layer.md](../data-layer.md). Phần "Vấn đề phát hiện" vẫn hữu ích; tình trạng sửa từng lỗi ghi ở [../migration-plan.md](../migration-plan.md) (P7).
 
 Mỗi file mô tả một tính năng theo cùng một mẫu:

@@ -1,195 +1,106 @@
 # Ghi chú (Notes)
 
-> Tài liệu mô tả code hiện tại (đọc ngày 2026-10-01). Số liệu đo bằng truy vấn chỉ đọc trên `data/lessons.db`.
+> Trạng thái hiện tại từ 2026-10-08: Notes của người dùng anonymous chỉ lưu trên trình duyệt, không ghi vào DB của hệ thống.
 
-## Mục đích
+## Kiến trúc lưu trữ
 
-Người dùng lưu từ vựng vào các thư mục ("folder"), xem lại và làm bài kiểm tra trắc nghiệm trên các từ đã lưu.
+- Toàn bộ thư mục và từ đã lưu nằm trong `localStorage` với key `hsk:notes:local:v1`.
+- Không có đồng bộ tài khoản, đồng bộ thiết bị hay ghi xuống SQLite/server DB.
+- Dữ liệu thuộc origin và browser profile hiện tại. Xoá site data, dùng trình duyệt/profile khác hoặc chế độ riêng tư có thể làm mất dữ liệu.
+- Dữ liệu Notes cũ trong bảng SQLite được giữ nguyên để có thể phục hồi thủ công. Không tự nhập dữ liệu đó vào trình duyệt vì người dùng anonymous không có định danh để xác định chủ sở hữu.
+- Các route `/api/notes/**` cũ trả `410 Gone`, ngăn client cũ tiếp tục đọc hoặc ghi Notes trên server.
 
-Có một folder hệ thống **Mistake** (`id = 'mistake'`). Folder này không đổi tên và không xoá được. Mỗi khi người dùng trả lời sai trong QuizMode, từ đó được tự động thêm vào Mistake.
+Module trung tâm là `src/lib/localNotes.ts`. Mọi màn hình phải dùng module này thay vì truy cập `localStorage` trực tiếp.
 
-## Màn hình & route
+## Màn hình và luồng ghi
 
-| Route / thành phần | File | Vai trò |
-|---|---|---|
-| `/notes` | `src/app/notes/page.tsx` | Lưới các folder, kèm số từ trong mỗi folder. Có nút tạo folder mới |
-| `/notes/[id]` | `src/app/notes/[id]/page.tsx` | Danh sách từ trong một folder. Đổi tên / xoá folder, xoá từ, chọn nhiều, làm bài kiểm tra |
-| `NoteModal` | `src/app/components/NoteModal.tsx` | Hộp thoại "Thêm vào folder". Có tạo folder ngay trong hộp thoại |
-| Link vào `/notes` | `GlobalShell.tsx:169` (thanh rail), `:409` (sidebar), `lesson/[id]/page.tsx:440`, `reading/[slug]/LessonReader.tsx:256` | |
+| Nơi | Hành vi |
+|---|---|
+| `/notes` | Đọc danh sách thư mục local, tạo thư mục mới và hiển thị dung lượng đang dùng |
+| `/notes/[id]` | Đọc/đổi tên/xoá thư mục, xoá từ, chọn nhiều và tạo bài kiểm tra hoàn toàn ở local |
+| `NoteModal` | Chọn hoặc tạo thư mục local rồi lưu từ; không gọi API |
+| `LocalNoteFolderModal` | Chọn/tạo thư mục đích cho tùy chọn tự lưu của Luyện nhập |
+| `QuizMode` | Từ trả lời sai được lưu vào thư mục hệ thống `local-mistake` |
+| `PracticeMode` | Khi bật tự lưu, câu sai/bỏ qua/xem đáp án được lưu vào thư mục đã chọn |
 
-### Các chỗ có thể thêm từ vào ghi chú
+`local-mistake` có tên **Từ chưa vững**, luôn được tạo khi đọc store cũ chưa có thư mục hệ thống. Không cho đổi tên hoặc xoá thư mục này.
 
-| Nơi | Cách thêm | Payload gửi `POST /api/notes/items` | `sourceLessonId` |
-|---|---|---|---|
-| `/lesson/[id]`, chế độ Flashcard | Nút 📝 trên mặt trước thẻ (`lesson/[id]/page.tsx:481`) → `NoteModal` (`:578-582`) | `zh, py, vn, pos` của `VocabCard` | `id` bài học (`lessons.id`) |
-| `/lesson/[id]`, chế độ List | Nút 📝 trong `VocabListCard.extra` (`:545-549`) → `NoteModal` | như trên | `lessons.id` |
-| `/reading/[slug]` (bài khoá Mandarin Bean) | Popup của từ → nút thêm ghi chú (`LessonReader.tsx:150`) → `NoteModal` (`:375`) | `zh = word.hanzi`, `py = word.pinyin` (MB), `vn`/`pos` lấy từ kết quả `/api/search` (rỗng nếu không tìm thấy) | **không truyền** → `null` |
-| QuizMode, trả lời sai (tự động) | `answerMultiple` (`lesson/[id]/QuizMode.tsx:87-97`) | `folderId: 'mistake'`, `zh, py, vn, pos` của câu hỏi | `lessonId` nếu có. Mở từ trang notes thì `null` |
+## Schema local v1
 
-QuizMode được dùng ở `/lesson/[id]?mode=quiz` (`lesson/[id]/page.tsx:568`, có `lessonId`) và ở `/notes/[id]` (`notes/[id]/page.tsx:113`, **không** có `lessonId`). `MatchGame` không ghi ghi chú.
+```ts
+interface LocalNotesStoreV1 {
+  version: 1;
+  folders: Array<{
+    id: string;
+    name: string;
+    isSystem: boolean;
+    createdAt: string;
+  }>;
+  items: Array<{
+    id: string;
+    folderId: string;
+    sourceKey: string;
+    zh: string;
+    py: string;
+    vn: string;
+    pos: string;
+    sourceLessonId: string | null;
+    createdAt: string;
+  }>;
+}
+```
 
-## Luồng xử lý
+Giới hạn ứng dụng:
 
-### Thêm từ qua NoteModal
+- tối đa 100 thư mục;
+- tối đa 500 item được thêm mới trên toàn bộ các thư mục;
+- tên thư mục tối đa 100 ký tự;
+- store Notes vẫn có hàng rào phụ 3 MiB theo ước lượng bảo thủ `JSON.length * 2`;
+- chống trùng trong một thư mục theo `sourceKey`, sau đó theo cặp `zh + py`;
+- JSON sai schema/version được bỏ an toàn và khởi tạo lại thư mục hệ thống.
 
-1. Người dùng bấm 📝 → component cha đặt `noteWord` → render `<NoteModal word=… />`.
-2. Khi mount, modal gọi `GET /api/notes/folders` và chọn sẵn `folders[0]` (`NoteModal.tsx:15-20`). Server sắp xếp `is_system DESC`, nên folder chọn sẵn luôn là **Mistake**.
-3. (Tuỳ chọn) Tạo folder: `POST /api/notes/folders {name}`, rồi chọn folder vừa tạo (`:22-30`).
-4. Bấm "Lưu vào ghi chú" → `POST /api/notes/items {folderId, zh, py, vn, pos, sourceLessonId}` (`:32-43`).
-5. API kiểm tra `folderId` và `zh` (`api/notes/items/route.ts:15`), rồi gọi `addNoteItem` (`db.ts:646-657`):
-   - `SELECT id FROM note_items WHERE folder_id = ? AND zh = ?`. Đã có thì trả item cũ, không chèn thêm;
-   - chưa có thì `INSERT` với id ngẫu nhiên.
-6. Client hiện "✓ Đã lưu" và đóng modal sau 800 ms. Client **không đọc response**.
+Mỗi lần thêm từ, module kiểm tra giới hạn 500 trước khi serialize và gọi `localStorage.setItem`. Store cũ đã có hơn 500 từ vẫn được đọc nguyên vẹn, không bị cắt hoặc xoá; user phải xoá bớt trước khi thêm từ mới. Lỗi quota hoặc localStorage bị chặn trả `false`; luồng học vẫn tiếp tục và UI có thể báo không lưu được.
 
-### Tự thêm vào Mistake khi làm quiz sai
+## Dung lượng ước tính
 
-1. `answerMultiple` sai → `POST /api/notes/items {folderId:'mistake', …}` (`QuizMode.tsx:90-96`).
-2. Server trả `item.id`, có thể là id **của item đã có sẵn** nếu Mistake đã chứa từ này. Client lưu vào `savedMistakeIds` (Map `zh → id`).
-3. Màn hình kết quả có nút "🗑 Xoá" cạnh từng từ sai → `DELETE /api/notes/items/{id}` (`:213-219`).
+Đo trực tiếp trên dữ liệu HSK hiện có bằng đúng shape JSON của local store và cách tính UTF-16 bảo thủ:
 
-### Trang `/notes`
+| Số từ | Dung lượng ước tính | Trung bình mỗi từ |
+|---:|---:|---:|
+| 100 | 43,9 KiB | khoảng 449 byte |
+| 500 (giới hạn ứng dụng) | khoảng 0,22 MiB | khoảng 450 byte |
+| 1.000 | 0,43 MiB | khoảng 454 byte |
+| 4.898 (toàn bộ HSK 1–6 hiện tại) | 2,16 MiB | khoảng 462 byte |
 
-1. Mount → `GET /api/notes/folders` → render lưới folder (`notes/page.tsx:14-16`).
-2. Tạo folder: `POST /api/notes/folders`, thêm vào state, chuyển sang `/notes/{id}` (`:18-30`).
+Với mẫu hiện tại, 500 từ chiếm khoảng 0,22 MiB, tương đương khoảng 4,4% của quota 5 MiB. Từ có nghĩa dài hơn, metadata dài hơn hoặc nhiều folder sẽ làm dung lượng thực tế tăng nhẹ.
 
-### Trang `/notes/[id]`
+`/notes` hiển thị `số item/500`, dung lượng ước tính và thanh phần trăm theo giới hạn 500 từ. Hàng rào 3 MiB vẫn được giữ để phòng dữ liệu bất thường; đây là giới hạn riêng của ứng dụng, không phải cam kết quota giống nhau trên mọi trình duyệt.
 
-1. `GET /api/notes/folders`, rồi tìm folder hiện tại ở client (`notes/[id]/page.tsx:44-51`). Không có API lấy một folder.
-2. `GET /api/notes/items?folderId={id}` → `getNoteItems` sắp xếp `created_at DESC` (`:53-60`, `db.ts:639-644`).
-3. Các thao tác:
-   - **Đổi tên** (chỉ folder không phải hệ thống): `PATCH /api/notes/folders/{id} {name}` (`:74-79`).
-   - **Xoá folder**: xác nhận inline, `DELETE /api/notes/folders/{id}`, rồi về `/notes` (`:81-84`).
-   - **Xoá 1 từ**: xác nhận inline trên card, rồi `DELETE /api/notes/items/{itemId}` (`:86-91`).
-   - **Xoá nhiều**: chế độ `select` → overlay xác nhận → gửi N request `DELETE` song song bằng `Promise.all` (`:93-99`).
-   - **Kiểm tra**: xem mục Logic.
-   - **Phát âm**: bấm chữ Hán → Web Speech API `zh-CN`, rate 0.85 (`:12-18`).
-   - **Đi tới bài học**: nút → khi có `sourceLessonId`, link tới `/lesson/{sourceLessonId}?mode=list&word={zh}` (`:296-303`).
+## Đồng bộ giao diện
 
-## API
+- Sau mỗi ghi thành công, module phát sự kiện `hsk:notes:local-changed` để cập nhật các component trong cùng tab.
+- Trang `/notes` nghe thêm sự kiện `storage` để cập nhật khi tab khác thay đổi key Notes.
+- Dữ liệu không được đồng bộ giữa thiết bị. Nếu sau này có đăng nhập, cần thiết kế rõ cơ chế import/merge trước khi bật server sync.
 
-| Method | Path | Input | Output | File |
-|---|---|---|---|---|
-| GET | `/api/notes/folders` | — | `{ folders: {id,name,isSystem,createdAt,itemCount}[] }` | `src/app/api/notes/folders/route.ts:6-8` |
-| POST | `/api/notes/folders` | `{name}`. Rỗng thì trả 400 | `{ folder }` | `…/folders/route.ts:10-14` |
-| PATCH | `/api/notes/folders/[id]` | `{name}`. Rỗng thì trả 400 | `{ ok: true }`, kể cả khi không có dòng nào bị đổi | `…/folders/[id]/route.ts:6-12` |
-| DELETE | `/api/notes/folders/[id]` | — | `{ ok: true }`, kể cả với folder hệ thống | `…/folders/[id]/route.ts:14-18` |
-| GET | `/api/notes/items?folderId=` | `folderId`. Thiếu thì trả 400 | `{ items: NoteItem[] }` | `src/app/api/notes/items/route.ts:6-10` |
-| POST | `/api/notes/items` | `{folderId, zh, py?, vn?, pos?, sourceLessonId?}`. Thiếu `folderId`/`zh` thì trả 400 | `{ item }` (mới, hoặc item đã có) | `…/items/route.ts:12-18` |
-| DELETE | `/api/notes/items/[id]` | — | `{ ok: true }` | `src/app/api/notes/items/[id]/route.ts:6-10` |
+## API Notes cũ
 
-## Dữ liệu
+Các route sau chỉ còn là hàng rào tương thích và đều trả `410 Gone` với thông báo Notes anonymous đã chuyển sang localStorage:
 
-DDL nằm trong `ensureNoteTables` (`db.ts:575-601`). Hàm này chạy `CREATE TABLE IF NOT EXISTS` và seed Mistake ở **mỗi lần gọi** bất kỳ hàm note nào.
+- `GET`, `POST /api/notes/folders`
+- `PATCH`, `DELETE /api/notes/folders/[id]`
+- `GET`, `POST /api/notes/items`
+- `DELETE /api/notes/items/[id]`
 
-| Thao tác | DB cũ | DB v4 |
-|---|---|---|
-| Folder | `note_folders(id, name, is_system, created_at)` | `note_folders` giữ nguyên cột. Thêm `CHECK is_system IN (0,1)`, `created_at` có DEFAULT |
-| Item | `note_items(id, folder_id → note_folders ON DELETE CASCADE, zh, py, vn, pos, source_lesson_id, created_at)`. Index `note_items_folder` | `note_items(id, folder_id, word_id → words, sense_id → word_senses, source_passage_id → passages ON DELETE SET NULL, created_at)`. Thêm `UNIQUE(folder_id, word_id)` |
-| Nội dung hiển thị (`zh/py/vn/pos`) | copy text vào `note_items` | JOIN `words.hanzi`, `words.pinyin`, `word_senses.meaning_vi`, `word_senses.pos` (→ `parts_of_speech.name_vi`) |
-| Chống trùng | ở tầng ứng dụng, theo `(folder_id, zh)` | ràng buộc DB `UNIQUE(folder_id, word_id)` |
-| Đếm số từ | `LEFT JOIN … COUNT(i.id) GROUP BY f.id` | giữ nguyên |
+Repo và bảng `note_folders`/`note_items` hiện được giữ như dữ liệu legacy. Không thêm luồng UI hoặc API anonymous mới vào các bảng này.
 
-Dữ liệu hiện tại:
-- 2 folder: `mistake` "Mistake" (hệ thống) và `o37t8n0qb2` "bài khóa".
-- 5 item: 4 trong Mistake, 1 trong "bài khóa".
-- Cả 5 item đều có `source_lesson_id = NULL`. Không có item mồ côi.
+## Kiểm thử cần giữ
 
-### `PRAGMA foreign_keys` — CASCADE có chạy không?
-
-- Code không có `PRAGMA foreign_keys` nào (grep `src/`, `scripts/`).
-- Nhưng **`better-sqlite3` 13.0.3 được biên dịch với `SQLITE_DEFAULT_FOREIGN_KEYS=1`** (`node_modules/better-sqlite3/deps/defines.gypi:14`). Mở DB bằng `better-sqlite3` thì `db.pragma('foreign_keys')` trả **1** (đã kiểm tra, chế độ readonly). CLI `sqlite3` thì trả 0.
-- Kết luận: **trong app, FK đang bật**. `ON DELETE CASCADE` của `note_items.folder_id` có chạy, nên xoá folder sẽ xoá item bên trong.
-  - Nhận định "`PRAGMA foreign_keys` đang tắt" trong `docs/db/DESIGN.md:22` chỉ đúng khi mở DB bằng CLI `sqlite3`, không đúng với runtime của app.
-- Hệ quả khác của FK bật: `POST /api/notes/items` với `folderId` không tồn tại sẽ vi phạm FK. `INSERT` ném lỗi và route không try/catch, nên trả 500. Kết luận này suy ra từ code, chưa chạy thử.
-
-## Logic chi tiết
-
-- **Folder Mistake**:
-  - `MISTAKE_FOLDER_ID = 'mistake'` (`db.ts:555`). Được seed nếu chưa có, mỗi lần gọi `ensureNoteTables` (`:595-600`).
-  - `renameNoteFolder` / `deleteNoteFolder` có điều kiện `AND is_system = 0` (`:630, :636`), nên với Mistake chúng im lặng không làm gì.
-  - Trên UI, nút sửa/xoá bị ẩn với folder hệ thống (`notes/[id]/page.tsx:194`).
-- **Thứ tự folder**: `ORDER BY is_system DESC, created_at ASC` (`db.ts:613`). Mistake luôn đứng đầu.
-- **Chống trùng**:
-  - Theo `(folder_id, zh)`, **chỉ chữ Hán, không xét pinyin** (`db.ts:649-650`). Vì vậy 行 xíng và 行 háng không thể cùng nằm trong một folder.
-  - Trùng thì không cập nhật `py/vn/pos`; trả item cũ bằng cách tải **toàn bộ** item của folder rồi `find` (`:650`).
-  - DB không có ràng buộc UNIQUE.
-- **ID**:
-  - Folder và item đều dùng `Math.random().toString(36).slice(2, 12)` (`db.ts:621, :651`), tối đa 10 ký tự.
-  - Không kiểm tra trùng. Nếu trùng thì PK conflict, ném lỗi và trả 500.
-- **Tên folder**: server `trim()` (`db.ts:623, :630`). Không giới hạn độ dài, không chống trùng tên.
-- **Xoá**: hard delete, không có thùng rác hay undo. Xoá folder thì item bị xoá theo nhờ CASCADE (FK bật, xem trên).
-
-### Chế độ ôn tập trong `/notes/[id]`
-
-Có 3 trạng thái `mode` (`notes/[id]/page.tsx:24-25`):
-
-| `mode` | Vào bằng | Hành vi |
-|---|---|---|
-| `null` (mặc định) | — | Lưới card, phân trang 24 từ/trang (`:42, :250-252`). Mỗi card có nút xoá và nút sang bài học |
-| `'select'` | "Chọn từ" | Bấm card để chọn/bỏ. Có "Chọn tất cả", "Xoá" (≥1 từ), "测 Kiểm tra" (≥2 từ). **Hiện tất cả item, không phân trang** (`:252`) |
-| `'quiz-pick'` | "测 Tạo bài kiểm tra" (cần ≥2 từ) | Chọn sẵn tất cả item, rồi "Bắt đầu →" (≥2 từ) |
-
-Bắt đầu kiểm tra → `noteItemToVocabCard` (`:20-22`; `ex` rỗng, `botu` rỗng) → `<QuizMode vocab=… speak=… />` (`:108-117`, không có `lessonId`).
-
-QuizMode (`src/app/lesson/[id]/QuizMode.tsx`):
-- Chỉ có câu hỏi **trắc nghiệm** (`type: 'multiple'`), hai chiều `zh-to-vn` / `vn-to-zh`.
-- Số câu: 10 / 20 / 30 / Tất cả, chỉ hiện các mức ≤ số từ (`:31, :47-50`).
-- Mỗi câu có 1 đáp án đúng và tối đa 3 phương án nhiễu, lấy ngẫu nhiên từ chính tập từ đã chọn (`:52-63`). Có 2 từ thì chỉ có 2 phương án.
-- Trả lời sai → tự thêm vào Mistake (xem Luồng).
-
-## Trạng thái phía client
-
-| Thành phần | State | Ghi chú |
-|---|---|---|
-| `/notes` | `folders`, `creatingFolder`, `newFolderName` | |
-| `/notes/[id]` | `folder`, `items`, `loading`, `renamingId`, `renameVal`, `confirmDeleteFolder`, `quizVocab`, `mode`, `selected: Set`, `confirmDeleteSelected`, `confirmDeleteItem`, `notesPage` | Cập nhật lạc quan sau khi xoá: lọc `items` và giảm `itemCount` |
-| `NoteModal` | `folders`, `selectedId`, `creating`, `newName`, `saving`, `saved` | |
-| `QuizMode` | `savedMistakeIds: Map<zh, itemId>`, `deletedMistakes: Set<zh>` | Reset mỗi lần bắt đầu quiz |
-
-Không dùng localStorage, không cache. Mọi màn hình đều fetch lại khi mount.
-
-## Script liên quan
-
-Không có script nào ghi `note_*`. Bảng được tạo lười trong `db.ts` lần đầu một API note được gọi.
-
-## Vấn đề phát hiện
-
-1. **NoteModal mặc định chọn folder Mistake** (`NoteModal.tsx:18` + `db.ts:613`). Người dùng bấm "Lưu" ngay thì từ rơi vào Mistake, là folder đáng lẽ chỉ chứa từ làm sai.
-2. **NoteModal không kiểm tra response** (`NoteModal.tsx:35-42`). Server lỗi (400/500) vẫn hiện "✓ Đã lưu". Từ đã có trong folder cũng hiện "Đã lưu" mà không báo trùng.
-3. **Chống trùng theo `zh` bỏ qua pinyin và nghĩa** (`db.ts:649`). Lưu lại cùng chữ Hán với nghĩa khác thì bị bỏ qua, dữ liệu cũ giữ nguyên.
-4. **Nút "Xoá khỏi Mistake" có thể xoá item có từ trước.** Khi quiz sai một từ đã có trong Mistake, `addNoteItem` trả id của item cũ (`db.ts:650`) và QuizMode lưu id đó (`QuizMode.tsx:95`). Bấm "Xoá" sẽ xoá bản ghi cũ, kể cả bản ghi có `source_lesson_id`.
-5. **Quiz trong trang notes không truyền `lessonId`** (`notes/[id]/page.tsx:113`). Từ sai được thêm vào Mistake với `source_lesson_id = NULL`, nên mất link về bài học. Item gốc ở folder nguồn vẫn có `sourceLessonId`.
-6. **Quay lại sau quiz không tải lại danh sách** (`notes/[id]/page.tsx:112`). Nút chỉ chạy `setQuizVocab(null)`. Nếu đang ở folder Mistake và xoá từ trong màn hình kết quả quiz, hoặc quiz thêm từ mới vào Mistake, lưới hiển thị sẽ cũ cho tới khi reload.
-7. **Đọc bài (`LessonReader`) không truyền nguồn** (`LessonReader.tsx:194`, kiểu `noteWord` không có `sourceLessonId`). Thêm nữa, `vn`/`pos` lấy từ `/api/search`, tức kết quả khớp `zh` chính xác, nếu không có thì **lấy kết quả đầu tiên** (`:207`). Vì vậy ghi chú có thể lưu nghĩa của một từ khác (ví dụ một từ ghép chứa chữ đó). Pinyin lấy từ MB (`mā ma`), có thể khác format với pinyin bài HSK (`māma`).
-8. **Link "Đi đến bài học" không mở đúng trang danh sách.** `?mode=list&word=` chỉ đặt `idx` (`lesson/[id]/page.tsx:343-346`). Chế độ list phân trang theo `listPage`, luôn bắt đầu từ trang 1 (`:333, :529`). Từ nằm ngoài trang 1 sẽ không hiện ra.
-9. **`/notes/[id]` với id không tồn tại** vẫn render, hiện tên "…" và danh sách rỗng. Code không xử lý lỗi (`:48-49`).
-10. **Không có API lấy một folder.** `/notes/[id]` tải toàn bộ folder rồi tìm ở client (`:44-51`). Query string `folderId` không được `encodeURIComponent` (`:55`). Hiện tại vô hại vì id là base36.
-11. **Xoá nhiều = N request DELETE song song** (`:94`). Không có endpoint xoá hàng loạt, không kiểm tra lỗi từng request.
-12. **Rename gửi thừa request**: `onKeyDown Enter` và `onBlur` đều gọi `renameFolder` (`:184-185`). Có gửi 2 lần PATCH hay không còn tuỳ việc blur có bắn khi input bị unmount — chưa xác minh.
-13. **`PATCH`/`DELETE` folder hệ thống vẫn trả `{ok:true}`** dù không có gì thay đổi (`api/notes/folders/[id]/route.ts`).
-14. **`ensureNoteTables` chạy DDL + `SELECT` seed ở mọi lời gọi** (`db.ts:575-601`), kể cả mỗi lần đọc. Phần MB lessons đã có `WeakSet` để chỉ chạy DDL một lần mỗi connection, phần note thì chưa.
-15. **`pos` không đồng nhất giữa các nguồn.** Dữ liệu thật: item trong Mistake có `pos` = `n`, `adj`, `v/n`; item trong "bài khóa" có `pos` = `Danh từ`. Không rõ 4 item Mistake được tạo từ màn hình nào — chưa xác minh.
-
-## Ảnh hưởng khi chuyển DB v4
-
-1. **`addNoteItem` đổi chữ ký**: nhận `{folderId, wordId, senseId?, sourcePassageId?}` thay cho `zh/py/vn/pos`. Mọi chỗ gọi phải gửi `word_id`:
-   - `NoteModal.tsx:38`;
-   - `QuizMode.tsx:93`;
-   - các component cha cung cấp `word`: `lesson/[id]/page.tsx:580`, `LessonReader.tsx:150`.
-
-   Dữ liệu client phải mang `wordId`/`senseId`:
-   - vocab bài học → `words.id`/`word_senses.id`;
-   - token bài khoá → `tokens[].s` (sense id) theo `docs/db/DESIGN.md`.
-2. **Chống trùng** chuyển sang `UNIQUE(folder_id, word_id)`. Nên dùng `INSERT … ON CONFLICT(folder_id, word_id) DO NOTHING RETURNING` (hoặc SELECT lại), bỏ phần tải toàn folder ở `db.ts:650`.
-   - Lưu ý: UNIQUE theo `word_id` chứ không theo `sense_id`. Không thể lưu hai nghĩa khác nhau của cùng một từ vào cùng folder, giống hành vi hiện tại.
-3. **`getNoteItems` phải JOIN** `words` (+ `word_senses`, `parts_of_speech`) để trả `zh/py/vn/pos`.
-   - Khi `sense_id IS NULL` cần luật chọn nghĩa hiển thị, ví dụ sense `position` nhỏ nhất. Luật này chưa có trong thiết kế.
-   - Giữ nguyên shape `NoteItem` thì UI `notes/[id]` và `noteItemToVocabCard` không phải sửa.
-4. **`source_lesson_id` → `source_passage_id` không cùng nghĩa.**
-   - `source_lesson_id` hiện chứa `lessons.id`, tức bài HSK/bài chủ đề (được truyền từ `lesson/[id]` và `QuizMode`).
-   - `passages` là bài khoá Mandarin Bean, còn `LessonReader` lại **không** truyền nguồn.
-   - Hiện 5/5 dòng là NULL nên migrate không mất dữ liệu. Nhưng code mới cần quyết định: link "→" (`notes/[id]/page.tsx:296-303`) trỏ về đâu khi bảng `lessons` bị bỏ, và có truyền `passage_id` từ `LessonReader` hay không.
-5. **FK `note_items.word_id REFERENCES words(id)` không có `ON DELETE`.** Xoá một từ đang có trong ghi chú sẽ bị chặn (FK bật). Cần quyết định hành vi.
-6. Dùng `better-sqlite3` thì FK đã bật mặc định. `PRAGMA foreign_keys = ON` trong `schema.sql` vẫn nên giữ để script/CLI có cùng hành vi. Cần sửa câu ở `docs/db/DESIGN.md:22`.
-7. Bỏ seed Mistake khỏi đường đọc: seed một lần trong migration, đặt `is_system = 1`.
-8. `QuizMode` (dùng chung cho bài học và ghi chú) nhận `VocabCard` có `zh/py/vn/pos`. Khi chuyển sang `word_id`, QuizMode cần thêm `wordId` để POST vào Mistake.
+- store rỗng luôn có `local-mistake`;
+- đọc được store local cũ chưa có folder hệ thống;
+- JSON hỏng không làm crash trang;
+- tạo/đổi tên/xoá folder và thêm/xoá item hoạt động;
+- không xoá được folder hệ thống;
+- thêm trùng không tạo item thứ hai;
+- item thứ 501 bị từ chối nhưng 500 item cũ vẫn được giữ;
+- đầy quota hoặc vượt 3 MiB không làm gián đoạn phiên học;
+- không còn `fetch('/api/notes...')` trong client.

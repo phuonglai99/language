@@ -1,7 +1,9 @@
 'use client';
+import HanziZoom from '@/app/components/HanziZoom';
 import { useState, useEffect, useTransition, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { LoadingIndicator } from '@/app/components/LoadingIndicator';
 import { t } from '@/i18n';
 
 type AlignLesson = {
@@ -54,21 +56,25 @@ function AlignListInner() {
   const status = getAlignmentStatusParam(searchParams.get('status'));
 
   const [lessons, setLessons] = useState<AlignLesson[]>([]);
-  const [loading, setLoading] = useState(true);
+  const requestKey = JSON.stringify([hsk, unmatched, q, status]);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const loading = loadedKey !== requestKey;
   const [searchVal, setSearchVal] = useState(q);
   const [, startTransition] = useTransition();
 
   useEffect(() => {
-    setLoading(true);
+    const controller = new AbortController();
     const params = new URLSearchParams();
     if (hsk) params.set('hsk', String(hsk));
     if (status) params.set('status', status);
     else if (unmatched) params.set('unmatched', '1');
     if (q) params.set('q', q);
-    fetch(`/api/dictation/align?${params}`)
+    fetch(`/api/dictation/align?${params}`, { signal: controller.signal })
       .then(r => r.json())
-      .then(d => { setLessons(d.lessons ?? []); setLoading(false); });
-  }, [hsk, unmatched, q, status]);
+      .then(d => { if (!controller.signal.aborted) { setLessons(d.lessons ?? []); setLoadedKey(requestKey); } })
+      .catch(() => { if (!controller.signal.aborted) { setLessons([]); setLoadedKey(requestKey); } });
+    return () => controller.abort();
+  }, [hsk, unmatched, q, status, requestKey]);
 
   function replaceParams(next: { hsk?: number | null; unmatched?: boolean; q?: string; status?: AlignmentStatus | null }) {
     const params = new URLSearchParams();
@@ -183,7 +189,7 @@ function AlignListInner() {
         </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>{t.common.loading}</div>
+          <LoadingIndicator label={t.common.loading} />
         ) : lessons.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)' }}>{t.dictation.align.list.empty}</div>
         ) : (
@@ -231,7 +237,7 @@ function AlignListInner() {
                       </div>
                     </div>
                     <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 18, fontWeight: 700, color: 'var(--ink)', lineHeight: 1.3 }}>
-                      {l.title_zh_simplified}
+                      <HanziZoom text={l.title_zh_simplified} />
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--ash)', lineHeight: 1.4, flex: 1 }}>
                       {l.title_en}
@@ -250,7 +256,7 @@ function AlignListInner() {
 
 export default function AlignListPage() {
   return (
-    <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--ash)' }}>{t.common.loading}</div>}>
+    <Suspense fallback={<LoadingIndicator variant="page" label={t.common.loading} />}>
       <AlignListInner />
     </Suspense>
   );

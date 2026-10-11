@@ -1,5 +1,20 @@
 /** UI text shared by several screens. See src/i18n/README.md. */
 export const common = {
+  hanziZoom: {
+    fullDictionary: 'Xem giải thích Hán–Việt và ví dụ đầy đủ',
+    title: 'Tra chữ và từ tiếng Trung',
+    open: 'Bấm để tra nghĩa và phóng to',
+    openText: (text: string) => `Tra nghĩa và phóng to ${text}`,
+    close: 'Đóng',
+    size: 'Cỡ chữ',
+    pinyin: 'Pinyin',
+    meaning: 'Nghĩa tiếng Việt',
+    definition: 'Giải thích',
+    level: 'Cấp độ',
+    display: 'Tuỳ chỉnh hiển thị',
+    details: 'Chi tiết từng chữ và nét viết',
+    detailsHint: 'Chọn một chữ để xem cấu tạo và cách viết',
+  },
   loading: 'Đang tải…',
   saving: 'Đang lưu…',
   all: 'Tất cả',

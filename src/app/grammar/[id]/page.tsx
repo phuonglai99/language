@@ -1,8 +1,10 @@
 'use client';
+import HanziZoom from '@/app/components/HanziZoom';
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { Lesson, GrammarPoint, Exercise, Comparison } from '@/types';
+import { LoadingIndicator } from '@/app/components/LoadingIndicator';
 import { t } from '@/i18n';
 
 function ExerciseItem({ ex, idx }: { ex: Exercise; idx: number }) {
@@ -15,7 +17,7 @@ function ExerciseItem({ ex, idx }: { ex: Exercise; idx: number }) {
   return (
     <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '16px 20px', marginBottom: 10 }}>
       <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ash-light)', marginBottom: 8 }}>{t.grammar.exercise.label(idx + 1)}</div>
-      <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 16, color: 'var(--ink)', marginBottom: 14, lineHeight: 1.6 }}>{ex.question}</div>
+      <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 16, color: 'var(--ink)', marginBottom: 14, lineHeight: 1.6 }}><HanziZoom text={ex.question} /></div>
 
       {ex.type === 'choice' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -64,10 +66,10 @@ function ComparisonCard({ c }: { c: Comparison }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
         {[{ zh: c.wordA, py: c.pinyinA, vn: c.meaningA, ex: c.exA }, { zh: c.wordB, py: c.pinyinB, vn: c.meaningB, ex: c.exB }].map((w, i) => (
           <div key={i} style={{ padding: '16px 18px', background: i === 0 ? 'var(--gold-light)' : 'var(--blue-light)', borderRight: i === 0 ? '1px solid var(--border)' : 'none' }}>
-            <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 28, fontWeight: 700, color: 'var(--ink)', marginBottom: 2 }}>{w.zh}</div>
+            <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 28, fontWeight: 700, color: 'var(--ink)', marginBottom: 2 }}><HanziZoom text={w.zh} /></div>
             <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: i === 0 ? 'var(--gold)' : 'var(--blue)', marginBottom: 4 }}>{w.py}</div>
             <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 10 }}>{w.vn}</div>
-            <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 13, color: 'var(--ink)', marginBottom: 2 }}>{w.ex.zh}</div>
+            <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 13, color: 'var(--ink)', marginBottom: 2 }}><HanziZoom text={w.ex.zh} /></div>
             <div style={{ fontSize: 11.5, color: 'var(--ash)', fontStyle: 'italic' }}>{w.ex.vn}</div>
           </div>
         ))}
@@ -82,7 +84,7 @@ function GrammarSection({ g, open, onToggle, sectionRef }: { g: GrammarPoint; op
     <div ref={sectionRef} style={{ border: '1px solid var(--border)', borderRadius: 10, marginBottom: 12, overflow: 'hidden', background: 'var(--card-bg)' }}>
       <button onClick={onToggle} style={{ width: '100%', padding: '18px 22px', background: open ? 'var(--primary-light)' : 'var(--card-bg)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, textAlign: 'left' }}>
         <div>
-          <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 17, fontWeight: 700, color: open ? 'var(--primary)' : 'var(--ink)', marginBottom: 2 }}>{g.title}</div>
+          <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 17, fontWeight: 700, color: open ? 'var(--primary)' : 'var(--ink)', marginBottom: 2 }}><HanziZoom text={g.title} /></div>
           <div style={{ fontSize: 12, color: open ? 'var(--primary)' : 'var(--ash)' }}>{g.titleVn}</div>
         </div>
         <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 18, color: open ? 'var(--primary)' : 'var(--ash-light)', flexShrink: 0, marginTop: 2 }}>{open ? '−' : '+'}</div>
@@ -91,7 +93,7 @@ function GrammarSection({ g, open, onToggle, sectionRef }: { g: GrammarPoint; op
       {open && (
         <div style={{ padding: '0 22px 22px', borderTop: '1px solid var(--border)' }}>
           <div style={{ margin: '18px 0 14px', padding: '12px 18px', background: 'var(--red-light)', border: '1px solid var(--red)', borderRadius: 6, fontFamily: 'JetBrains Mono, monospace', fontSize: 14, color: 'var(--red)', fontWeight: 500, letterSpacing: '0.04em' }}>
-            {g.formula}
+            <HanziZoom text={g.formula} />
           </div>
           <p style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--ink-soft)', marginBottom: 16 }}>{g.explanation}</p>
 
@@ -100,7 +102,7 @@ function GrammarSection({ g, open, onToggle, sectionRef }: { g: GrammarPoint; op
               <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ash-light)', marginBottom: 10 }}>{t.grammar.section.examples}</div>
               {g.examples.map((ex, i) => (
                 <div key={i} style={{ padding: '10px 14px', background: 'var(--paper-alt)', border: '1px solid var(--border)', borderRadius: 6, marginBottom: 6 }}>
-                  <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 15, color: 'var(--ink)', marginBottom: 3 }}>{ex.zh}</div>
+                  <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 15, color: 'var(--ink)', marginBottom: 3 }}><HanziZoom text={ex.zh} /></div>
                   <div style={{ fontSize: 12.5, color: 'var(--ash)', fontStyle: 'italic', marginBottom: ex.note ? 3 : 0 }}>{ex.vn}</div>
                   {ex.note && <div style={{ fontSize: 11, color: 'var(--gold)', marginTop: 2 }}>📌 {ex.note}</div>}
                 </div>
@@ -150,14 +152,14 @@ export default function GrammarPage() {
     g.title.toLowerCase().includes(q) || g.titleVn.toLowerCase().includes(q)
   ) : lesson.grammar) : [];
 
-  if (!lesson) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--ash)' }}>{t.common.loading}</div>;
+  if (!lesson) return <LoadingIndicator variant="page" label={t.common.loading} />;
 
   return (
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
       {/* ── HEADER ── */}
       <header style={{ background: '#1e3a8a', position: 'sticky', top: 0, zIndex: 50, boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>
         <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', gap: 14 }}>
-          <Link href="/" style={{ textDecoration: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 13, flexShrink: 0, transition: 'color 0.15s' }}
+          <Link href={`/grammar/hsk/${encodeURIComponent(lesson.level)}`} style={{ textDecoration: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 13, flexShrink: 0, transition: 'color 0.15s' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
             onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}>{t.common.back}</Link>
           <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.12)', flexShrink: 0 }} />

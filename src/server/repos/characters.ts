@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { getDb } from '../db/connection';
-import { fetchFromHanzii, type HanziiCharacter } from '../services/hanzii';
+import { fetchFromHanzii, type HanziiCharacter } from '../third-party-service/hanzii';
 import {
   BOTU_FROM_ROLE, formationLabel, normalizeStrokeData, parseFormation, parseFrequency, parseRadical,
 } from '@/shared/hanzi';
@@ -15,6 +15,27 @@ interface CharacterRow {
 
 const parseList = (json: string | null): string[] => (json ? (JSON.parse(json) as string[]) : []);
 
+function meaningPartsOfSpeech(db: Database.Database, char: string, meanings: string[], dictionaryPos: string | null): (string | null)[] {
+  const senses = db.prepare(`
+    SELECT s.meaning_vi AS meaning, p.name_vi AS pos
+    FROM words w
+    JOIN word_senses s ON s.word_id = w.id
+    LEFT JOIN parts_of_speech p ON p.code = s.pos
+    WHERE w.hanzi = ? AND s.pos IS NOT NULL
+    ORDER BY s.position
+  `).all(char) as { meaning: string | null; pos: string | null }[];
+  const normalized = senses.map(sense => ({
+    ...sense,
+    terms: (sense.meaning ?? '').toLocaleLowerCase('vi').split(/[,;/]/).map(term => term.trim()).filter(Boolean),
+  }));
+  const uniquePos = [...new Set(normalized.map(sense => sense.pos).filter((value): value is string => !!value))];
+  return meanings.map(meaning => {
+    const source = meaning.toLocaleLowerCase('vi');
+    const match = normalized.find(sense => sense.pos && sense.terms.some(term => source.includes(term) || term.includes(source)));
+    return match?.pos ?? (uniquePos.length === 1 ? uniquePos[0] : dictionaryPos);
+  });
+}
+
 function readCharacter(db: Database.Database, char: string): CharacterRow | undefined {
   return db.prepare(`
     SELECT c.*, r.form AS radical_form, r.han_viet AS radical_hv, s.data AS strokes
@@ -27,6 +48,7 @@ function readCharacter(db: Database.Database, char: string): CharacterRow | unde
 
 function toDetail(db: Database.Database, r: CharacterRow): CharacterDetailDTO {
   const dictionary = parseList(r.hv_dictionary);
+  const meanings = parseList(r.hv_meanings);
   // First dictionary entry starts with the part of speech: "(Tính) Tốt, lành, …"
   const pos = dictionary[0]?.match(/^\(([^)]+)\)/)?.[1] ?? null;
   const parts = db.prepare(
@@ -43,7 +65,8 @@ function toDetail(db: Database.Database, r: CharacterRow): CharacterDetailDTO {
     netbut: r.stroke_order,
     popular: r.frequency,
     pos,
-    meansTdpt: parseList(r.hv_meanings),
+    meansTdpt: meanings,
+    meaningPartsOfSpeech: meaningPartsOfSpeech(db, r.char, meanings, pos),
     meansTg: parseList(r.hv_compounds),
     meansTdtd: dictionary,
     strokesSvg: r.strokes ? (JSON.parse(r.strokes) as StrokeData) : null,

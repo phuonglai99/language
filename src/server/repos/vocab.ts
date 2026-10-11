@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { getWordSenses } from './wordSenses';
 import { getDb } from '../db/connection';
 import { hskLessonId, parseLessonId } from '@/shared/lessons';
 import { posNameVi } from '@/shared/pos';
@@ -21,7 +22,7 @@ interface WordCardRow {
 
 const CARD_COLUMNS = `
   w.id, w.hanzi, w.pinyin, w.pinyin_plain, w.hsk_level, w.created_at,
-  s.id AS sense_id, s.pos, COALESCE(s.meaning_vi, s.meaning_en) AS meaning, e.zh AS ex_zh, e.vi AS ex_vi
+  s.id AS sense_id, s.pos, COALESCE(NULLIF(trim(s.meaning_vi), ''), s.meaning_en) AS meaning, e.zh AS ex_zh, e.vi AS ex_vi
 `;
 
 /** Word lists: the word's first Vietnamese sense (else first sense) and its first example. */
@@ -29,7 +30,7 @@ const LIST_CARD_SELECT = `
   SELECT ${CARD_COLUMNS}
   FROM words w
   LEFT JOIN word_senses s ON s.id = (
-    SELECT id FROM word_senses WHERE word_id = w.id ORDER BY meaning_vi IS NULL, position LIMIT 1
+    SELECT id FROM word_senses WHERE word_id = w.id ORDER BY NULLIF(trim(meaning_vi), '') IS NULL, verified DESC, COALESCE(note, '') LIKE '%Hanzii word %' DESC, position LIMIT 1
   )
   LEFT JOIN sense_examples e ON e.sense_id = s.id AND e.position = (
     SELECT MIN(position) FROM sense_examples WHERE sense_id = s.id
@@ -45,7 +46,7 @@ const LESSON_CARD_SELECT = `
   FROM lesson_words lw
   JOIN words w ON w.id = lw.word_id
   LEFT JOIN word_senses s ON s.id = COALESCE(lw.sense_id, (
-    SELECT id FROM word_senses WHERE word_id = w.id ORDER BY meaning_vi IS NULL, position LIMIT 1
+    SELECT id FROM word_senses WHERE word_id = w.id ORDER BY NULLIF(trim(meaning_vi), '') IS NULL, verified DESC, COALESCE(note, '') LIKE '%Hanzii word %' DESC, position LIMIT 1
   ))
   LEFT JOIN sense_examples e ON e.sense_id = s.id AND e.position = (
     SELECT MAX(position) FROM sense_examples WHERE sense_id = s.id
@@ -84,6 +85,7 @@ function botuFor(db: Database.Database, hanzi: string): VocabCard['botu'] {
 function toCard(db: Database.Database, r: WordCardRow): VocabCard {
   return {
     id: `w${r.id}`,
+    senses: getWordSenses(db, r.id, r.sense_id),
     zh: r.hanzi,
     py: r.pinyin,
     pos: posNameVi(r.pos),
@@ -183,7 +185,7 @@ export async function listVocabByLevel(level: string): Promise<LevelVocabItemDTO
   const out: LevelVocabItemDTO[] = [];
   const push = (rows: WordCardRow[], lessonId: string, lessonTitle: string) => {
     for (const r of rows) {
-      out.push({ lessonId, lessonTitle, zh: r.hanzi, py: r.pinyin, pos: posNameVi(r.pos), vn: r.meaning ?? '', ex: { zh: r.ex_zh ?? '', vn: r.ex_vi ?? '' } });
+      out.push({ senses: getWordSenses(db, r.id, r.sense_id), lessonId, lessonTitle, zh: r.hanzi, py: r.pinyin, pos: posNameVi(r.pos), vn: r.meaning ?? '', ex: { zh: r.ex_zh ?? '', vn: r.ex_vi ?? '' } });
     }
   };
   push(db.prepare(`${LIST_CARD_SELECT} WHERE w.hsk_level = ? ORDER BY w.pinyin_plain, w.hanzi`).all(n) as WordCardRow[], hskLessonId(n), `HSK${n}`);
@@ -198,10 +200,9 @@ export async function listVocabByLevel(level: string): Promise<LevelVocabItemDTO
  * Ranked: exact hanzi, hanzi prefix, exact pinyin, pinyin prefix, then the rest.
  * Each result links to its HSK word list, else to the first lesson that teaches it.
  */
-export async function searchWords(query: string, limit = 40): Promise<SearchResultDTO[]> {
+export async function searchWords(query: string, limit = 40, db: Database.Database = getDb(), vietnameseOnly = false): Promise<SearchResultDTO[]> {
   const q = query.trim();
   if (!q) return [];
-  const db = getDb();
   const plainPinyin = pinyinPlain(q);
   const plainVi = stripVietnamese(q);
 
@@ -227,6 +228,7 @@ export async function searchWords(query: string, limit = 40): Promise<SearchResu
     ) AS lesson
     FROM (${LIST_CARD_SELECT}) r
     WHERE r.id IN (SELECT value FROM json_each(?))
+      ${vietnameseOnly ? "AND EXISTS (SELECT 1 FROM word_senses s WHERE s.word_id = r.id AND trim(COALESCE(s.meaning_vi, '')) <> '')" : ''}
     ORDER BY
       CASE WHEN r.hanzi = ? THEN 0 WHEN r.hanzi LIKE ? ESCAPE '\\' THEN 1
            WHEN r.pinyin_plain = ? THEN 2 WHEN r.pinyin_plain LIKE ? ESCAPE '\\' THEN 3 ELSE 4 END,
@@ -238,6 +240,7 @@ export async function searchWords(query: string, limit = 40): Promise<SearchResu
     const inList = r.hsk_level != null && r.hsk_level <= 6;
     const [lessonId, lessonTitle] = r.lesson ? r.lesson.split('\t') : [null, ''];
     return {
+      senses: getWordSenses(db, r.id, r.sense_id),
       lessonId: inList ? hskLessonId(r.hsk_level!) : lessonId,
       lessonTitle: inList ? `HSK${r.hsk_level}` : lessonTitle,
       level: inList ? `HSK${r.hsk_level}` : '',

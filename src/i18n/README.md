@@ -21,7 +21,7 @@ import { t } from '@/i18n';
 ## Không đặt ở đây
 
 - Tên web, mô tả, logo → `src/config/site.ts`.
-- Prompt gửi cho AI → `src/lib/claude.ts`.
+- Prompt gửi cho AI → `src/server/third-party-service/claude.ts`.
 - Nhãn dữ liệu mà code so khớp (từ loại "Danh từ", lục thư "hình thanh", nhãn cấp "Chưa xếp cấp" trong URL…) → `src/shared/*`.
 - Nội dung học (nghĩa, ví dụ, ngữ pháp, bài khóa) → DB.
 

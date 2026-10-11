@@ -1,44 +1,42 @@
 'use client';
-import { useState, useEffect } from 'react';
+import HanziZoom from '@/app/components/HanziZoom';
+import { useState } from 'react';
 import { t } from '@/i18n';
+import { addLocalNoteItem, createLocalNoteFolder, listLocalNoteFolders, type LocalNoteFolder } from '@/lib/localNotes';
 
-interface NoteFolder { id: string; name: string; isSystem: boolean; }
 interface WordInfo { zh: string; py: string; vn: string; pos: string; sourceLessonId?: string; }
 
 export default function NoteModal({ word, onClose }: { word: WordInfo; onClose: () => void }) {
-  const [folders, setFolders] = useState<NoteFolder[]>([]);
-  const [selectedId, setSelectedId] = useState<string>('');
+  const [folders, setFolders] = useState<LocalNoteFolder[]>(() => listLocalNoteFolders());
+  const [selectedId, setSelectedId] = useState<string>(() => {
+    const localFolders = listLocalNoteFolders();
+    return localFolders.find(folder => !folder.isSystem)?.id ?? localFolders[0]?.id ?? '';
+  });
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    fetch('/api/notes/folders').then(r => r.json()).then(d => {
-      setFolders(d.folders ?? []);
-      if (d.folders?.length) setSelectedId(d.folders[0].id);
-    });
-  }, []);
-
-  async function createFolder() {
+  function createFolder() {
     if (!newName.trim()) return;
-    const r = await fetch('/api/notes/folders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName }) });
-    const d = await r.json();
-    setFolders(f => [...f, d.folder]);
-    setSelectedId(d.folder.id);
+    const folder = createLocalNoteFolder(newName);
+    if (!folder) { setError(t.notes.local.storageError); return; }
+    setFolders(f => [...f, folder]);
+    setSelectedId(folder.id);
     setNewName('');
     setCreating(false);
   }
 
-  async function save() {
+  function save() {
     if (!selectedId) return;
     setSaving(true);
-    await fetch('/api/notes/items', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folderId: selectedId, zh: word.zh, py: word.py, vn: word.vn, pos: word.pos, sourceLessonId: word.sourceLessonId }),
+    const ok = addLocalNoteItem(selectedId, {
+      sourceKey: `manual:${word.sourceLessonId ?? 'dictionary'}:${word.zh}:${word.py}`.slice(0, 240),
+      zh: word.zh, py: word.py, vn: word.vn, pos: word.pos, sourceLessonId: word.sourceLessonId ?? null,
     });
     setSaving(false);
+    if (!ok) { setError(t.notes.local.storageError); return; }
     setSaved(true);
     setTimeout(onClose, 800);
   }
@@ -52,12 +50,13 @@ export default function NoteModal({ word, onClose }: { word: WordInfo; onClose: 
 
         {/* Word preview */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border)' }}>
-          <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 32, fontWeight: 700, color: 'var(--ink)' }}>{word.zh}</span>
+          <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 32, fontWeight: 700, color: 'var(--ink)' }}><HanziZoom text={word.zh} pinyin={word.py} meaning={word.vn} /></span>
           <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: 'var(--blue)' }}>{word.py}</span>
           <span style={{ fontSize: 13, color: 'var(--ink-soft)', flex: 1 }}>{word.vn}</span>
         </div>
 
         <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ash)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.notes.modal.heading}</div>
+        <div style={{ margin: '-4px 0 12px', fontSize: 11.5, color: 'var(--ash)' }}>{t.notes.local.localOnly}</div>
 
         {/* Folder list */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14, maxHeight: 200, overflowY: 'auto' }}>
@@ -87,6 +86,8 @@ export default function NoteModal({ word, onClose }: { word: WordInfo; onClose: 
             </button>
           )}
         </div>
+
+        {error && <p role="alert" style={{ margin: '0 0 12px', color: 'var(--red)', fontSize: 12.5 }}>{error}</p>}
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: 8 }}>

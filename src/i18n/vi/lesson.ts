@@ -60,6 +60,7 @@ export const lesson = {
     },
     countHeading: 'Số câu hỏi',
     countOption: (n: number) => `${n} câu`,
+    preparing: 'Đang tạo bài kiểm tra…',
     medals: { perfect: '完美！', good: '不错！', keepGoing: '加油！' },
     stats: { score: 'Điểm số', accuracy: 'Chính xác', time: 'Thời gian' },
     reviewHeading: (n: number) => `Cần ôn lại · ${n} từ`,

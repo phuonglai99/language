@@ -8,7 +8,7 @@
  */
 import { getDb } from '../src/server/db/connection';
 import { markCrawlError, saveCrawledCharacter } from '../src/server/repos/characters';
-import { fetchFromHanzii } from '../src/server/services/hanzii';
+import { fetchFromHanzii } from '../src/server/third-party-service/hanzii';
 
 function arg(name: string, fallback: number): number {
   const i = process.argv.indexOf(`--${name}`);

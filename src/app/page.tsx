@@ -4,6 +4,7 @@ import Link from 'next/link';
 import type { Lesson } from '@/types';
 import { isHskWordList, lessonGrammarHref } from '@/shared/lessons';
 import { siteConfig } from '@/config/site';
+import { LoadingIndicator } from '@/app/components/LoadingIndicator';
 import { t } from '@/i18n';
 
 type LessonMeta = Omit<Lesson, 'vocab' | 'grammar'> & { vocabCount: number; grammarCount: number };
@@ -96,7 +97,7 @@ export default function Home() {
               fontSize: 13, fontWeight: 600, transition: 'background 0.15s', userSelect: 'none',
               boxShadow: '0 2px 8px rgba(74,114,160,0.4)',
             }}>
-              {uploading ? t.home.header.uploadingButton(progress) : t.home.header.importButton}
+              {uploading ? <LoadingIndicator variant="inline" label={progress} /> : t.home.header.importButton}
               <input ref={fileRef} type="file" accept=".docx,.xlsx,.xls" style={{ display: 'none' }}
                 disabled={uploading} onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
             </label>
@@ -115,13 +116,7 @@ export default function Home() {
 
         {/* Upload progress */}
         {uploading && (
-          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '14px 18px', marginBottom: 20, color: '#92400e', fontSize: 13, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 18 }}>⏳</span>
-            <div>
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>{progress}</div>
-              <div style={{ fontSize: 11, opacity: 0.7 }}>{t.home.upload.durationHint}</div>
-            </div>
-          </div>
+          <LoadingIndicator label={progress} description={t.home.upload.durationHint} />
         )}
 
         {/* Empty state */}

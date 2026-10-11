@@ -1,7 +1,9 @@
 'use client';
+import HanziZoom from '@/app/components/HanziZoom';
 import { useState, useEffect, useTransition, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { LoadingIndicator } from '@/app/components/LoadingIndicator';
 import { t } from '@/i18n';
 
 type DictationLesson = {
@@ -63,20 +65,24 @@ function DictationPageInner() {
   const status = getAlignmentStatusParam(searchParams.get('status'));
 
   const [lessons, setLessons] = useState<DictationLesson[]>([]);
-  const [loading, setLoading] = useState(true);
+  const requestKey = JSON.stringify([hsk, q, status]);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const loading = loadedKey !== requestKey;
   const [searchVal, setSearchVal] = useState(q);
   const [, startTransition] = useTransition();
 
   useEffect(() => {
-    setLoading(true);
+    const controller = new AbortController();
     const params = new URLSearchParams();
     if (hsk) params.set('hsk_level', String(hsk));
     if (q) params.set('q', q);
     if (status) params.set('status', status);
-    fetch(`/api/dictation/lessons?${params}`)
+    fetch(`/api/dictation/lessons?${params}`, { signal: controller.signal })
       .then(r => r.json())
-      .then(d => { setLessons(d.lessons ?? []); setLoading(false); });
-  }, [hsk, q, status]);
+      .then(d => { if (!controller.signal.aborted) { setLessons(d.lessons ?? []); setLoadedKey(requestKey); } })
+      .catch(() => { if (!controller.signal.aborted) { setLessons([]); setLoadedKey(requestKey); } });
+    return () => controller.abort();
+  }, [hsk, q, status, requestKey]);
 
   function setFilter(nextHsk: number | null, nextStatus = status) {
     const params = new URLSearchParams();
@@ -186,7 +192,7 @@ function DictationPageInner() {
         </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>{t.common.loading}</div>
+          <LoadingIndicator label={t.common.loading} />
         ) : lessons.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 60, color: 'var(--ash)' }}>{t.common.emptyLessons}</div>
         ) : (
@@ -231,7 +237,7 @@ function DictationPageInner() {
                       </div>
                     </div>
                     <div style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 18, fontWeight: 700, color: 'var(--ink)', lineHeight: 1.3 }}>
-                      {l.title_zh_simplified}
+                      <HanziZoom text={l.title_zh_simplified} />
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--ash)', lineHeight: 1.4, flex: 1 }}>
                       {l.title_en}
@@ -267,7 +273,7 @@ function DictationPageInner() {
 
 export default function DictationPage() {
   return (
-    <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--ash)' }}>{t.common.loading}</div>}>
+    <Suspense fallback={<LoadingIndicator variant="page" label={t.common.loading} />}>
       <DictationPageInner />
     </Suspense>
   );

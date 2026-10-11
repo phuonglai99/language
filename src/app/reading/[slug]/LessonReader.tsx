@@ -1,9 +1,9 @@
 'use client';
-import { useState, useRef, useCallback, useMemo } from 'react';
+import WordTranslationPopup from '../WordTranslationPopup';
+import HanziZoom from '@/app/components/HanziZoom';
+import { useState, useRef, useMemo } from 'react';
 import Link from 'next/link';
-import NoteModal from '@/app/components/NoteModal';
 import { ReadingBreadcrumb } from '../ReadingBreadcrumb';
-import { canSpeakChinese, speakChinese } from '@/lib/speech';
 import { t } from '@/i18n';
 
 type Word = {
@@ -26,7 +26,6 @@ type NavItem = {
   title_zh_simplified: string;
 };
 
-type VnResult = { zh: string; py: string; vn: string; pos: string; lessonTitle: string; level: string };
 
 const LEVEL_COLOR: Record<number, string> = {
   1: '#3a8a5c', 2: '#4a72a0', 3: '#a0720a', 4: '#c8392b', 5: '#7a3db0',
@@ -61,137 +60,16 @@ function AlignmentStatusBadge({ status }: { status: AlignmentStatus }) {
 const isPunct = (hanzi: string) =>
   !hanzi.trim() || /^[\s，。！？、：；""''「」【】（）…—\-·]+$/.test(hanzi);
 
-function WordToken({
-  word, showPinyin, onLookup, isOpen, onOpen, onAddNote,
-}: {
-  word: Word;
-  showPinyin: boolean;
-  onLookup: (hanzi: string, callback: (r: VnResult | null) => void) => void;
-  isOpen: boolean;
-  onOpen: () => void;
-  onAddNote: (w: { zh: string; py: string; vn: string; pos: string }) => void;
-}) {
-  const [vnResult, setVnResult] = useState<VnResult | null | 'loading' | 'none'>('none');
-  const ref = useRef<HTMLSpanElement>(null);
-
-  if (isPunct(word.hanzi)) {
-    return (
-      <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 20, color: 'var(--ink-soft)', lineHeight: showPinyin ? 1.4 : 1.8 }}>
-        {word.hanzi}
-      </span>
-    );
-  }
-
-  function handleClick() {
-    onOpen();
-    if (vnResult === 'none') {
-      setVnResult('loading');
-      onLookup(word.hanzi, r => setVnResult(r ?? null));
-    }
-  }
-
-  const accent = word.hsk != null ? (LEVEL_COLOR[word.hsk] ?? 'var(--red)') : 'var(--red)';
-  const showTooltip = isOpen;
-
+function WordToken({ word, showPinyin, onOpen, isOpen }: { word: Word; showPinyin: boolean; onOpen: (anchor: HTMLElement) => void; isOpen: boolean }) {
+  if (isPunct(word.hanzi)) return <span>{word.hanzi}</span>;
   return (
-    <span
-      ref={ref}
-      style={{
-        position: 'relative', display: 'inline-flex', flexDirection: 'column',
-        alignItems: 'center', cursor: 'pointer', margin: '0 1px',
-        verticalAlign: 'bottom',
-      }}
-      onClick={handleClick}
-    >
-      {/* Tooltip */}
-      {showTooltip && (
-        <span style={{
-          position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 30, pointerEvents: 'none',
-          background: '#1e3a8a',
-          border: '1px solid rgba(255,255,255,0.12)',
-          borderRadius: 10, padding: '10px 14px',
-          fontSize: 12, lineHeight: 1.55, whiteSpace: 'nowrap',
-          boxShadow: '0 6px 24px rgba(0,0,0,0.35)',
-          fontFamily: 'Be Vietnam Pro, sans-serif',
-          display: 'flex', flexDirection: 'column', gap: 4,
-          minWidth: 120,
-        }}>
-          {/* Pinyin + pronunciation (read only when the button is pressed) */}
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: '#93c5fd', fontWeight: 600 }}>
-              {word.pinyin}
-            </span>
-            {canSpeakChinese() && (
-              <button
-                type="button"
-                aria-label={t.reading.word.speakAria(word.hanzi)}
-                title={t.common.speak}
-                onMouseDown={e => { e.stopPropagation(); e.preventDefault(); speakChinese(word.hanzi); }}
-                style={{ padding: '1px 6px', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6, color: 'rgba(255,255,255,0.85)', cursor: 'pointer', fontSize: 12, lineHeight: 1.4, pointerEvents: 'auto' }}>
-                🔊
-              </button>
-            )}
-          </span>
-          {/* Vietnamese from user's vocab */}
-          {vnResult === 'loading' && (
-            <span style={{ color: 'rgba(200,191,176,0.5)', fontSize: 11 }}>{t.reading.word.lookingUp}</span>
-          )}
-          {vnResult && vnResult !== 'loading' && vnResult !== 'none' && (
-            <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {vnResult.pos && (
-                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,191,176,0.45)' }}>{vnResult.pos}</span>
-              )}
-              <span style={{ color: '#f5f1e8', fontSize: 13, fontWeight: 600 }}>{vnResult.vn}</span>
-              <span style={{ fontSize: 9, color: 'rgba(200,191,176,0.4)', fontFamily: 'JetBrains Mono, monospace' }}>{vnResult.lessonTitle}</span>
-            </span>
-          )}
-          {/* English definition from MB data */}
-          {word.definition && (
-            <span style={{ color: 'rgba(200,191,176,0.55)', fontSize: 11, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 4, marginTop: 2 }}>
-              {word.definition}
-            </span>
-          )}
-          {/* HSK badge */}
-          {word.hsk != null && (
-            <span style={{ marginTop: 2, fontSize: 9, fontFamily: 'JetBrains Mono, monospace', background: accent, color: '#fff', padding: '1px 6px', borderRadius: 4, alignSelf: 'flex-start' }}>
-              HSK {word.hsk}
-            </span>
-          )}
-          {/* Add note button */}
-          <button
-            onMouseDown={e => { e.stopPropagation(); e.preventDefault(); onAddNote({ zh: word.hanzi, py: word.pinyin, vn: (vnResult && vnResult !== 'loading' && vnResult !== 'none') ? vnResult.vn : '', pos: (vnResult && vnResult !== 'loading' && vnResult !== 'none') ? vnResult.pos : '' }); }}
-            style={{ marginTop: 4, padding: '3px 8px', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6, color: 'rgba(255,255,255,0.8)', cursor: 'pointer', fontSize: 11, pointerEvents: 'auto', alignSelf: 'flex-start' }}>
-            {t.common.notes}
-          </button>
-        </span>
-      )}
-
-      {/* Pinyin row */}
-      {showPinyin && (
-        <span style={{
-          fontSize: 11, color: isOpen ? '#3b82f6' : 'var(--ash)',
-          lineHeight: 1, marginBottom: 2,
-          fontFamily: 'Be Vietnam Pro, sans-serif', whiteSpace: 'nowrap',
-          transition: 'color 0.1s',
-        }}>
-          {word.pinyin}
-        </span>
-      )}
-
-      {/* Hanzi */}
-      <span style={{
-        fontFamily: 'Noto Serif SC, serif', fontSize: 20,
-        color: isOpen ? accent : 'var(--ink)',
-        lineHeight: 1.4,
-        fontWeight: word.hsk != null && word.hsk <= 2 ? 600 : 400,
-        transition: 'color 0.15s',
-        borderBottom: isOpen ? `2px solid ${accent}` : '2px solid transparent',
-      }}>
-        {word.hanzi}
+    <button type="button" className="reading-word-token" aria-haspopup="dialog" aria-expanded={isOpen} onClick={e => onOpen(e.currentTarget)}>
+      <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', margin: '0 1px', verticalAlign: 'bottom' }}>
+        {showPinyin && <span style={{ fontSize: 11, color: 'var(--ash)', lineHeight: 1, marginBottom: 2 }}>{word.pinyin}</span>}
+        <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 20, color: 'var(--ink)', lineHeight: 1.4,
+          fontWeight: word.hsk != null && word.hsk <= 2 ? 600 : 400 }}>{word.hanzi}</span>
       </span>
-    </span>
+    </button>
   );
 }
 
@@ -203,28 +81,9 @@ export default function LessonReader({
   next: NavItem | null;
   position: { index: number; total: number };
 }) {
+  const [activeWord, setActiveWord] = useState<{ key: string; word: Word; anchor: HTMLElement } | null>(null);
   const [showPinyin, setShowPinyin] = useState(true);
-  const [activeWordKey, setActiveWordKey] = useState<string | null>(null);
-  const [noteWord, setNoteWord] = useState<{ zh: string; py: string; vn: string; pos: string } | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const lookupCache = useRef<Record<string, VnResult | null>>({});
-
-  const handleLookup = useCallback((hanzi: string, cb: (r: VnResult | null) => void) => {
-    if (hanzi in lookupCache.current) {
-      cb(lookupCache.current[hanzi]);
-      return;
-    }
-    fetch(`/api/search?q=${encodeURIComponent(hanzi)}`)
-      .then(r => r.json())
-      .then(d => {
-        const results: VnResult[] = d.results ?? [];
-        // Exact word only: falling back to the first hit showed (and saved to notes) another word's meaning.
-        const match = results.find(r => r.zh === hanzi) ?? null;
-        lookupCache.current[hanzi] = match;
-        cb(match);
-      })
-      .catch(() => { lookupCache.current[hanzi] = null; cb(null); });
-  }, []);
 
   const levelColor = LEVEL_COLOR[lesson.hsk_level] ?? 'var(--ash)';
   const alignmentStatus = getAlignmentStatus(lesson.categories);
@@ -257,7 +116,7 @@ export default function LessonReader({
             HSK {lesson.hsk_level}
           </span>
           <span style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 14, color: '#f5f1e8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-            {lesson.title_zh_simplified}
+            <HanziZoom text={lesson.title_zh_simplified} />
           </span>
           <div className="reading-header-pager">
             {prev
@@ -282,12 +141,12 @@ export default function LessonReader({
         {/* Titles */}
         <div style={{ marginBottom: 20 }}>
           <h1 style={{ fontFamily: 'Noto Serif SC, serif', fontSize: 28, fontWeight: 700, color: 'var(--ink)', margin: '0 0 6px', lineHeight: 1.3 }}>
-            {lesson.title_zh_simplified}
+            <HanziZoom text={lesson.title_zh_simplified} />
           </h1>
           <div style={{ fontSize: 15, color: 'var(--ash)', margin: '0 0 10px' }}>{lesson.title_en}</div>
           {lesson.title_zh_traditional !== lesson.title_zh_simplified && (
             <div style={{ fontSize: 12, color: 'var(--ash-light)', fontFamily: 'Noto Serif SC, serif' }}>
-              {t.reading.lesson.traditional(lesson.title_zh_traditional)}
+              <HanziZoom text={lesson.title_zh_traditional}>{t.reading.lesson.traditional(lesson.title_zh_traditional)}</HanziZoom>
             </div>
           )}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
@@ -343,17 +202,7 @@ export default function LessonReader({
                 alignItems: showPinyin ? 'flex-end' : 'baseline',
                 gap: '0px 0px',
               }}>
-                {para.map((word, wi) => {
-                  const wKey = `${pi}-${wi}`;
-                  return (
-                    <WordToken
-                      key={wi} word={word} showPinyin={showPinyin} onLookup={handleLookup}
-                      isOpen={activeWordKey === wKey}
-                      onOpen={() => setActiveWordKey(k => k === wKey ? null : wKey)}
-                      onAddNote={w => { setNoteWord(w); setActiveWordKey(null); }}
-                    />
-                  );
-                })}
+                {para.map((word, wi) => <WordToken key={wi} word={word} showPinyin={showPinyin} isOpen={activeWord?.key === `${pi}-${wi}`} onOpen={anchor => setActiveWord(current => current?.key === `${pi}-${wi}` ? null : { key: `${pi}-${wi}`, word, anchor })} />)}
               </p>
             ))}
           </div>
@@ -386,8 +235,8 @@ export default function LessonReader({
           )}
         </nav>
       </main>
+      {activeWord && <WordTranslationPopup key={activeWord.key} word={activeWord.word} anchor={activeWord.anchor} onClose={() => setActiveWord(null)} />}
 
-      {noteWord && <NoteModal word={noteWord} onClose={() => setNoteWord(null)} />}
     </div>
   );
 }

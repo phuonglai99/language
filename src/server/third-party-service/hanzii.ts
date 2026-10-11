@@ -46,6 +46,45 @@ function decryptHanzii(b64: string): unknown {
   return JSON.parse(plain.toString('utf8'));
 }
 
+export interface HanziiWord {
+  id: string | number;
+  word: string;
+  pinyin: string;
+  content: {
+    kind?: string;
+    means: { mean: string; examples?: { e: string; m?: string; p?: string }[] }[];
+  }[];
+}
+
+/**
+ * Word dictionary, distinct from the character (kanji) endpoint.
+ * An authoritative not-found response is [], so callers can try the next dictionary.
+ * HTTP, timeout, decryption and invalid-payload failures throw and may be retried.
+ */
+export async function searchHanziiWords(query: string): Promise<HanziiWord[]> {
+  const params = new URLSearchParams({ key: query, page: '1', limit: '20' });
+  const res = await fetch(`https://api2.hanzii.net/api/search/all/vi/word/?${params}`, {
+    headers: { Referer: 'https://hanzii.net/' },
+    signal: AbortSignal.timeout(10_000),
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`Hanzii HTTP ${res.status}`);
+  const json = await res.json() as { data?: string };
+  if (typeof json.data !== 'string') throw new Error('Invalid Hanzii response');
+  return parseHanziiWordResponse(decryptHanzii(json.data));
+}
+
+/** Keep a valid dictionary miss distinct from a broken upstream response. */
+export function parseHanziiWordResponse(payload: unknown): HanziiWord[] {
+  if (!payload || typeof payload !== 'object') throw new Error('Invalid Hanzii results');
+  const data = payload as { found?: boolean; result?: HanziiWord[] };
+  if (data.found === false) return [];
+  if (!Array.isArray(data.result)) throw new Error('Invalid Hanzii results');
+  return data.result.filter(r => r && typeof r.word === 'string' && typeof r.pinyin === 'string'
+    && Array.isArray(r.content) && r.content.some(c => c && Array.isArray(c.means)
+      && c.means.some(m => m && typeof m.mean === 'string' && m.mean.trim())));
+}
+
 // ─── Fetch from Hanzii ───────────────────────────────────────────────────────
 
 export async function fetchFromHanzii(char: string): Promise<HanziiCharacter | null> {
