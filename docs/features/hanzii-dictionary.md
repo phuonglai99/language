@@ -32,3 +32,20 @@ Script `scripts/crawl-hanzii-words.ts` mặc định xử lý toàn bộ mục c
 Chỉ nhập kết quả trùng chữ Hán và pinyin (chuẩn hóa dấu cách, thanh nhẹ và biến điệu 一/不). Không tự gán nghĩa cho cách đọc khác. Tên người, cụm từ không có trong từ điển hoặc pinyin không khớp được ghi vào `missing` của `data/hanzii-words-report.json`; lỗi API/ghi DB nằm trong `errors`. Có lỗi thì script kết thúc với exit code 1. Báo cáo cập nhật sau mỗi batch, `completedAt` chỉ có khi hoàn tất.
 
 Kiểm thử: `tests/integration/dictionary.test.ts` dùng DB bộ nhớ và mock Hanzii, kiểm tra thứ tự nguồn, fallback, cache, bảo toàn nghĩa cũ, khóa ngoại, FTS và chống trùng.
+
+## Đối chiếu từ loại và tái sử dụng dữ liệu crawl
+
+Dữ liệu cũ vẫn dùng được:
+- `data/lessons.db.kanji.raw` giữ phản hồi gốc; các trường nghĩa đã chuyển sang `characters.hv_meanings`, `hv_dictionary` trong DB hiện tại.
+- `word_senses` có các nghĩa từ API word Hanzii, nhận diện qua `note` chứa nguồn `Hanzii word`.
+- Không lấy nhãn đầu tiên của chữ để gán cho mọi nghĩa. Chữ nhiều cách đọc và dẫn chiếu giản/phồn thể cần đối chiếu thêm; từ điển chữ cổ không đồng nhất với nghĩa từ hiện đại.
+
+`npm run repair:pos` mặc định **offline**: dùng nghĩa Hanzii đã có trong DB, nhãn `(Động)/(Danh)/…` của từ điển chữ có cách đọc đơn nhất, rồi các phản hồi từ đã lưu tại `data/hanzii-word-cache/`. Chỉ cập nhật nghĩa import chưa duyệt khi các thành phần nghĩa Việt khớp chính xác và cho một từ loại duy nhất. Không sửa mục đã duyệt, không đổi ID nghĩa hay liên kết bài học. Mỗi lần chạy tạo backup và báo cáo riêng `data/hanzii-pos-report-<timestamp>.json`, gồm thay đổi, nguồn chứng minh và mục chưa đối chiếu được.
+
+- `npm run repair:pos -- --replay-cache`: nhập lại phản hồi đã lưu, hữu ích khi bổ sung ánh xạ mã từ loại.
+- `npm run repair:pos -- --fetch-missing`: cho phép truy vấn Hanzii khi thiếu cache. Không cần tùy chọn này để dùng dữ liệu có sẵn.
+- Nhãn ghép như `v, n` tạo hai nghĩa/từ loại riêng; nhãn không nhận diện giữ `NULL`, không mặc định thành danh từ.
+- Import bài học đối chiếu với nghĩa Hanzii đã lưu và từ điển chữ ngay trong transaction, tránh đưa lại nhãn cũ đã được sửa.
+- `verified` vẫn là 0 cho kết quả đối chiếu tự động; `note` giữ nguồn và nhãn trước đó. Không đánh dấu như đã được người duyệt.
+
+Danh sách HSK và luyện nhập ưu tiên nghĩa Việt đã duyệt hoặc có nguồn Hanzii khi chọn nghĩa chính. Giao diện trả tất cả nghĩa, mặc định hiện hai nghĩa và có “Xem thêm”. Nghĩa chưa có tiếng Việt dùng nghĩa tiếng Anh; nhãn sai chưa có đủ bằng chứng vẫn được giữ và ghi trong báo cáo để duyệt.

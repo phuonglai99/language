@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { getWordSenses } from './wordSenses';
 import { getDb } from '../db/connection';
 import { parseLessonId } from '@/shared/lessons';
 import { posNameVi } from '@/shared/pos';
@@ -30,7 +31,7 @@ const HSK_ROWS = `
   LEFT JOIN word_senses s ON s.id = (
     SELECT id FROM word_senses
     WHERE word_id = w.id
-    ORDER BY trim(COALESCE(meaning_vi, '')) = '', position, id LIMIT 1
+    ORDER BY trim(COALESCE(meaning_vi, '')) = '', verified DESC, COALESCE(note, '') LIKE '%Hanzii word %' DESC, position, id LIMIT 1
   )
   LEFT JOIN sense_examples e ON e.sense_id = s.id AND e.position = (
     SELECT MIN(position) FROM sense_examples WHERE sense_id = s.id
@@ -46,7 +47,7 @@ const RANDOM_HSK_ROWS = `
   LEFT JOIN word_senses s ON s.id = (
     SELECT id FROM word_senses
     WHERE word_id = w.id
-    ORDER BY trim(COALESCE(meaning_vi, '')) = '', position, id LIMIT 1
+    ORDER BY trim(COALESCE(meaning_vi, '')) = '', verified DESC, COALESCE(note, '') LIKE '%Hanzii word %' DESC, position, id LIMIT 1
   )
   LEFT JOIN sense_examples e ON e.sense_id = s.id AND e.position = (
     SELECT MIN(position) FROM sense_examples WHERE sense_id = s.id
@@ -125,6 +126,7 @@ export function getVocabularyPracticeBank(lessonId: string, db: Database.Databas
     const pos = posNameVi(row.pos);
     const parsedPinyin = parseSourcePinyin(row.pinyin);
     const baseAnswer: PracticeAnswerDTO = {
+      senses: getWordSenses(db, row.word_id, row.sense_id),
       hanzi, pinyin: row.pinyin, pinyinNumber: parsedPinyin.ok ? parsedPinyin.numbered : '',
       meaningVi, pos,
       example: { zh: row.ex_zh ?? '', pinyin: row.ex_pinyin ?? '', vi: row.ex_vi ?? '' },

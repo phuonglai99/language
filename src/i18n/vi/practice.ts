@@ -55,7 +55,8 @@ export const practice = {
   },
   hanziHelp: 'Bật bàn phím tiếng Trung (Pinyin) trên thiết bị. Gõ cách đọc, chọn chữ Hán trong bộ gõ, rồi bấm Kiểm tra. Ứng dụng chấm chữ Hán bạn đã chọn và bỏ qua khoảng trắng.',
   shortcuts: {
-    enter: 'Kiểm tra · đúng tự chuyển câu, sai quay lại ô nhập',
+    enter: 'Kiểm tra · nếu đúng, nhấn Enter lần nữa để sang câu tiếp theo',
+    reveal: '/ · Xem đáp án',
   },
   localNotes: {
     option: 'Tự lưu từ chưa vững vào Notes',
@@ -84,6 +85,7 @@ export const practice = {
   },
   feedback: {
     correct: 'Chính xác!',
+    enterNext: 'Nhấn Enter lần nữa để sang câu tiếp theo.',
     pinyinIncorrect: 'Pinyin chưa đúng. Hãy kiểm tra âm và số thanh rồi thử lại.',
     hanziIncorrect: 'Chữ Hán chưa đúng. Hãy nhập lại hoặc chọn Xem đáp án.',
     revealed: 'Bạn đã xem đáp án. Câu này sẽ được ghi nhận là đã dùng gợi ý.',

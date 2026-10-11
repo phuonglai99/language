@@ -130,3 +130,29 @@ test('character quick translations omit classical examples without modifying sou
     assert.deepEqual(JSON.parse(db.prepare("SELECT hv_dictionary FROM characters WHERE char = '里'").pluck().get() as string), entries);
   } finally { db.close(); }
 });
+
+test('same gloss with different parts of speech stays separate on repeated Hanzii imports', () => {
+  const db = database();
+  try {
+    const entry: HanziiWord = { id: 77, word: '工作', pinyin: 'gōngzuò', content: [
+      { kind: 'v', means: [{ mean: 'công việc' }] }, { kind: 'n', means: [{ mean: 'công việc' }] },
+    ] };
+    saveHanziiWord(db, entry);
+    saveHanziiWord(db, entry);
+    assert.deepEqual(db.prepare('SELECT pos FROM word_senses ORDER BY position').pluck().all(), ['v', 'n']);
+  } finally { db.close(); }
+});
+
+test('Hanzii compound POS labels and cached formerly unknown tags retain sense identity', () => {
+  const db = database();
+  try {
+    const entry: HanziiWord = { id: 78, word: '工作', pinyin: 'gōngzuò', content: [{ kind: '', means: [{ mean: 'việc' }] }] };
+    const wordId = saveHanziiWord(db, entry);
+    const id = db.prepare('SELECT id FROM word_senses WHERE word_id = ?').pluck().get(wordId);
+    entry.content[0].kind = 'v, n';
+    saveHanziiWord(db, entry);
+    saveHanziiWord(db, entry);
+    assert.equal(db.prepare('SELECT pos FROM word_senses WHERE id = ?').pluck().get(id), 'v');
+    assert.deepEqual(db.prepare('SELECT pos FROM word_senses WHERE word_id = ? ORDER BY position').pluck().all(wordId), ['v', 'n']);
+  } finally { db.close(); }
+});

@@ -67,6 +67,8 @@ export default function GlobalShell() {
   const [currentMode, setCurrentMode] = useState<string | null>(null);
   const currentSection = activeSection(pathname, currentMode);
   const [open, setOpen] = useState(true);
+  const openRef = useRef(open);
+  const restoreOpenAfterHanziPanel = useRef<boolean | null>(null);
   const [sidebarW, setSidebarW] = useState(SIDEBAR_W_DEFAULT);
   const [dragging, setDragging] = useState(false);
   const dragStartX = useRef(0);
@@ -111,7 +113,29 @@ export default function GlobalShell() {
     const main = document.getElementById('app-main');
     if (main) main.style.paddingLeft = open ? `${sidebarW}px` : '52px';
     document.body.style.setProperty('--sidebar-w', open ? `${sidebarW}px` : '52px');
+    openRef.current = open;
   }, [open, sidebarW]);
+
+  useEffect(() => {
+    const syncHanziPanel = (event: Event) => {
+      const panelOpen = (event as CustomEvent<{ open?: boolean }>).detail?.open === true;
+      if (panelOpen) {
+        if (restoreOpenAfterHanziPanel.current === null) restoreOpenAfterHanziPanel.current = openRef.current;
+        document.body.classList.add('hanzi-panel-open');
+        setOpen(false);
+        return;
+      }
+      document.body.classList.remove('hanzi-panel-open');
+      const restore = restoreOpenAfterHanziPanel.current;
+      restoreOpenAfterHanziPanel.current = null;
+      if (restore !== null) setOpen(restore);
+    };
+    window.addEventListener('hsk:hanzi-panel', syncHanziPanel);
+    return () => {
+      window.removeEventListener('hsk:hanzi-panel', syncHanziPanel);
+      document.body.classList.remove('hanzi-panel-open');
+    };
+  }, []);
 
   const [previousSection, setPreviousSection] = useState(currentSection);
   if (previousSection !== currentSection) {

@@ -26,24 +26,37 @@ export default function CharacterDetails({ char }: { char: string }) {
     [labels.fields.lucthu, data.lucthu], [labels.fields.hinhthai, data.hinhthai],
     [labels.fields.netbut, data.netbut], [labels.fields.popular, frequencyLabel(data.popular)],
   ];
-  return <section className="hanzi-modal-details">
-    <div style={{ display: 'flex', gap: 20, alignItems: 'center', justifyContent: 'center' }}>
-      <div><strong lang="zh" style={{ fontSize: 48 }}>{char}</strong><p>{data.pinyin}</p><p>{data.cnVi}</p></div>
-      <CharStroke char={char} size={140} charData={data.strokesSvg} />
+  return <div className="hanzi-modal-details">
+    <div className="hanzi-character-overview">
+      <div className="hanzi-character-reading">
+        <strong lang="zh">{char}</strong>
+        {data.pinyin && <p className="hanzi-character-pinyin">{data.pinyin}</p>}
+        {data.cnVi && <p className="hanzi-character-sino">{data.cnVi}</p>}
+      </div>
+      <div className="hanzi-character-stroke"><CharStroke char={char} size={140} charData={data.strokesSvg} /></div>
     </div>
-    {data.pos && <p>{data.pos}</p>}
+    {data.pos && <p className="hanzi-character-pos">{data.pos}</p>}
     <dl className="hanzi-modal-fields">{fields.filter(([, value]) => value).map(([label, value]) => <div key={label}>
       <dt>{label}</dt><dd>{value}</dd>
     </div>)}</dl>
-    {!!data.botu?.length && <div>
+    {!!data.botu?.length && <section className="hanzi-detail-section">
       <h3>{labels.botuHeading} {data.botuSource === 'claude' && <small>{labels.aiSourceBadge}</small>}</h3>
-      {data.botu.map((part, i) => <p key={i}><strong lang="zh">{part.ph}</strong> · {t.lesson.botu.long[part.t === 'solo' ? 'doc' : part.t]} · {part.n}</p>)}
-    </div>}
-    {!!data.meansTdpt.length && <><h3>{labels.meaningHeading}</h3><ol>{data.meansTdpt.map((mean, i) => <li key={i}>{mean}</li>)}</ol></>}
-    {!!data.meansTdtd.length && <details>
+      <ul className="hanzi-breakdown-list">{data.botu.map((part, i) => <li key={i}><strong lang="zh">{part.ph}</strong><span>{t.lesson.botu.long[part.t === 'solo' ? 'doc' : part.t]}</span><p>{part.n}</p></li>)}</ul>
+    </section>}
+    {!!data.meansTdpt.length && <section className="hanzi-detail-section">
+      <h3>{labels.meaningHeading}</h3>
+      <ul className="hanzi-meaning-list">{data.meansTdpt.map((mean, i) => <li key={i}>
+        <span>{mean}</span>
+        {data.meaningPartsOfSpeech[i] && <small>{data.meaningPartsOfSpeech[i]}</small>}
+      </li>)}</ul>
+    </section>}
+    {!!data.meansTdtd.length && <details className="hanzi-dictionary-details">
       <summary style={{ cursor: 'pointer' }}>{t.common.hanziZoom.fullDictionary}</summary>
-      {data.meansTdtd.map((mean, i) => <p key={i} style={{ whiteSpace: 'pre-line' }}>{mean.replace(/\\n/g, '\n')}</p>)}
+      <div>{data.meansTdtd.map((mean, i) => <p key={i} style={{ whiteSpace: 'pre-line' }}>{mean.replace(/\\n/g, '\n')}</p>)}</div>
     </details>}
-    {!!data.meansTg.length && <><h3>{labels.compoundsHeading}</h3><p>{data.meansTg.join(' · ')}</p></>}
-  </section>;
+    {!!data.meansTg.length && <section className="hanzi-detail-section">
+      <h3>{labels.compoundsHeading}</h3>
+      <div className="hanzi-compound-list">{data.meansTg.map((compound, i) => <span key={i}>{compound}</span>)}</div>
+    </section>}
+  </div>;
 }

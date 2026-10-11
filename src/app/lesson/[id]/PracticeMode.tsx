@@ -1,4 +1,5 @@
 'use client';
+import { WordMeanings } from '@/app/components/WordMeanings';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -80,7 +81,7 @@ function answerCard(answer: PracticeAnswerDTO, onSpeak: () => void) {
         </button>
       </div>
       <div style={{ marginTop: 10, fontSize: 13 }}><strong>{t.practice.answer.numbered}:</strong> {answer.pinyinNumber || '—'}</div>
-      <div style={{ marginTop: 4, fontSize: 13 }}><strong>{t.practice.answer.meaning}:</strong> {answer.meaningVi}</div>
+      <WordMeanings key={answer.hanzi + answer.pinyin} senses={answer.senses} meaning={answer.meaningVi} pos={answer.pos} />
       {answer.example.zh && <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed var(--border)', fontSize: 13 }}>
         <strong>{t.practice.answer.example}:</strong> {answer.example.zh}
         {answer.example.pinyin && <div style={{ color: 'var(--red)', marginTop: 2 }}>{answer.example.pinyin}</div>}
@@ -95,6 +96,8 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
   const [bank, setBank] = useState<PracticeBankDTO | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [reload, setReload] = useState(0);
+  const [sourceLoading, setSourceLoading] = useState(true);
+  const [startPending, setStartPending] = useState(false);
   const [config, setConfig] = useState<PracticeConfig>(defaultPracticeConfig);
   const [progress, setProgress] = useState<VocabularyPracticeProgressV1 | null>(null);
   const [restored, setRestored] = useState(false);
@@ -112,6 +115,9 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const requestGeneration = useRef(0);
   const progressRef = useRef<VocabularyPracticeProgressV1 | null>(null);
+  const resumeSavedProgress = useRef(true);
+  const startPendingRef = useRef(false);
+  const startSessionRef = useRef<(data: PracticeBankDTO) => void>(() => undefined);
   const storageConflictRef = useRef(false);
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const feedbackAudioRef = useRef<AudioContext | null>(null);
@@ -131,20 +137,34 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
       .then(data => {
         setBank(data);
         const saved = readVocabularyPracticeProgress(sourceId);
-        if (saved) setConfig(saved.config);
         const ids = new Set(data.questions.map(question => question.questionId));
         const membershipValid = saved?.queue.every(item => ids.has(item.questionId));
-        if (saved && saved.contentSignature === data.contentSignature && membershipValid && saved.scoringVersion === data.scoringVersion) {
+        const contentValid = saved?.contentSignature === data.contentSignature && membershipValid;
+        if (resumeSavedProgress.current && saved && contentValid) setConfig(saved.config);
+        if (resumeSavedProgress.current && saved && contentValid && saved.scoringVersion === data.scoringVersion) {
           setProgress(saved);
-        } else if (saved && saved.contentSignature === data.contentSignature && membershipValid) {
+        } else if (resumeSavedProgress.current && saved && contentValid) {
           const queue = saved.queue.filter(item => item.phase !== 'review' && saved.initialQuestionIds.includes(item.questionId));
           const initialQuestionIds = queue.map(item => item.questionId);
           const records = Object.fromEntries([...new Set(initialQuestionIds)].map(id => [id, { ...emptyPracticeRecord(), draft: saved.records[id]?.draft ?? '' }]));
           setProgress({ ...saved, updatedAt: Date.now(), contentSignature: data.contentSignature, scoringVersion: data.scoringVersion, queue, initialQuestionIds, currentIndex: 0, records });
-        } else if (saved) removeVocabularyPracticeProgress(sourceId);
+        } else if (saved && !contentValid) removeVocabularyPracticeProgress(sourceId);
         setRestored(true);
+        setSourceLoading(false);
+        if (startPendingRef.current) {
+          startPendingRef.current = false;
+          setStartPending(false);
+          startSessionRef.current(data);
+        }
       })
-      .catch(error => { if (error instanceof Error && error.name !== 'AbortError') setLoadError(true); });
+      .catch(error => {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          setLoadError(true);
+          setSourceLoading(false);
+          setStartPending(false);
+          startPendingRef.current = false;
+        }
+      });
     return () => controller.abort();
   }, [sourceId, reload]);
 
@@ -185,25 +205,30 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
   const sourceItems = (bank?.counts['hanzi-to-hanzi'] ?? 0) + commonExcluded;
   const noteFolder: LocalNoteFolder | null = config.noteFolderId ? getLocalNoteFolder(config.noteFolderId) : null;
 
-  const startSession = useCallback((nextConfig = config, onlyQuestionIds?: string[]) => {
-    if (!bank) return;
+  const startSession = useCallback((nextConfig = config, onlyQuestionIds?: string[], bankOverride?: PracticeBankDTO) => {
+    const activeBank = bankOverride ?? bank;
+    if (!activeBank) return;
     const sessionConfig = nextConfig.autoSaveNotes && getLocalNoteFolder(nextConfig.noteFolderId)
       ? nextConfig
       : { ...nextConfig, autoSaveNotes: false, noteFolderId: '' };
     requestGeneration.current++;
-    const source = onlyQuestionIds ? bank.questions.filter(question => onlyQuestionIds.includes(question.questionId)) : bank.questions;
+    const source = onlyQuestionIds ? activeBank.questions.filter(question => onlyQuestionIds.includes(question.questionId)) : activeBank.questions;
     const built = buildPracticeQueue(source, onlyQuestionIds ? { ...sessionConfig, count: 'all' } : sessionConfig);
     if (!built.queue.length) return;
     const records = Object.fromEntries([...new Set(built.initialQuestionIds)].map(id => [id, emptyPracticeRecord()]));
     const next: VocabularyPracticeProgressV1 = {
-      version: 1, lessonId: sourceId, updatedAt: Date.now(), contentSignature: bank.contentSignature,
-      scoringVersion: bank.scoringVersion, config: sessionConfig, queue: built.queue,
+      version: 1, lessonId: sourceId, updatedAt: Date.now(), contentSignature: activeBank.contentSignature,
+      scoringVersion: activeBank.scoringVersion, config: sessionConfig, queue: built.queue,
       initialQuestionIds: built.initialQuestionIds, currentIndex: 0, records,
     };
     storageConflictRef.current = false;
     if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
     setFeedbackEffect(null); setPending(null); setProgress(next); setConfig(sessionConfig); setConfirmReset(false); setRequestError(''); setFormatError(''); setStorageConflict(false);
   }, [bank, config, sourceId]);
+
+  useEffect(() => {
+    startSessionRef.current = data => startSession(config, undefined, data);
+  }, [config, startSession]);
 
   const currentItem = progress?.queue[progress.currentIndex];
   const currentQuestion = currentItem ? questions.get(currentItem.questionId) : undefined;
@@ -237,9 +262,22 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
   }, [currentItem?.phase]);
 
   const advance = useCallback(() => {
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    setFeedbackEffect(null);
     setProgress(previous => previous ? { ...previous, updatedAt: Date.now(), currentIndex: Math.min(previous.currentIndex + 1, previous.queue.length) } : previous);
     setRequestError(''); setFormatError('');
   }, []);
+
+  useEffect(() => {
+    if (currentRecord?.submission?.status !== 'correct' || pending != null || confirmReset) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' || event.isComposing || event.repeat) return;
+      event.preventDefault();
+      advance();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [advance, confirmReset, currentRecord?.submission?.status, pending]);
 
   const focusAnswer = useCallback((select: boolean) => {
     window.requestAnimationFrame(() => {
@@ -285,11 +323,7 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
       if (data.status === 'correct') {
         setFeedbackEffect('correct');
         playCorrectTone(feedbackAudioRef.current);
-        feedbackTimerRef.current = setTimeout(() => {
-          if (generation !== requestGeneration.current) return;
-          setFeedbackEffect(null);
-          advance();
-        }, 650);
+        feedbackTimerRef.current = setTimeout(() => setFeedbackEffect(null), 650);
       } else {
         setFeedbackEffect('incorrect');
         feedbackTimerRef.current = setTimeout(() => setFeedbackEffect(null), 520);
@@ -299,7 +333,7 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
       }
     } catch { if (generation === requestGeneration.current) setRequestError(t.practice.errors.requestFailed); }
     finally { if (generation === requestGeneration.current) setPending(null); }
-  }, [advance, bank, changeRecord, currentItem, currentKey, currentQuestion, currentRecord, focusAnswer, pending, saveToLocalNotes, scheduleReview, sourceId]);
+  }, [bank, changeRecord, currentItem, currentKey, currentQuestion, currentRecord, focusAnswer, pending, saveToLocalNotes, scheduleReview, sourceId]);
 
   const reveal = useCallback(async () => {
     if (!bank || !currentQuestion || !currentRecord || pending) return;
@@ -320,6 +354,17 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
     finally { if (generation === requestGeneration.current) setPending(null); }
   }, [bank, changeRecord, currentKey, currentQuestion, currentRecord, pending, saveToLocalNotes, scheduleReview, sourceId]);
 
+  useEffect(() => {
+    if (!currentRecord || pending != null || confirmReset || currentRecord.revealedAnswer || currentRecord.submission?.status === 'correct') return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== '/' || event.repeat || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+      event.preventDefault();
+      void reveal();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [confirmReset, currentRecord, pending, reveal]);
+
   const skip = useCallback(() => {
     if (!bank || !currentQuestion || !currentRecord) return;
     const activeConfig = progress?.config ?? config;
@@ -339,7 +384,7 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
   }, [advance, bank, changeRecord, config, currentKey, currentQuestion, currentRecord, progress?.config, saveToLocalNotes, scheduleReview, sourceId]);
 
   if (!bank && !loadError) return <div style={panel}><LoadingIndicator label={t.practice.loading} /></div>;
-  if (loadError) return <div style={panel}><p>{t.practice.loadError}</p><button style={primary} onClick={() => { setLoadError(false); setBank(null); setRestored(false); setReload(value => value + 1); }}>{t.practice.retryLoad}</button></div>;
+  if (loadError) return <div style={panel}><p>{t.practice.loadError}</p><button style={primary} onClick={() => { setLoadError(false); setSourceLoading(true); setBank(null); setRestored(false); setReload(value => value + 1); }}>{t.practice.retryLoad}</button></div>;
   if (!bank || !restored) return <div style={panel}><LoadingIndicator label={t.practice.loading} /></div>;
 
   if (!progress) return (
@@ -361,7 +406,10 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
             return <label key={source} style={{ padding: '11px 12px', border: `1px solid ${active ? 'var(--red)' : 'var(--border)'}`, borderRadius: 9, cursor: 'pointer', minHeight: random ? 62 : undefined }}>
               <input type="radio" name="practice-level" checked={active} onChange={() => {
                 requestGeneration.current++;
-                setSourceId(source); setBank(null); setLoadError(false); setRestored(false); setProgress(null);
+                resumeSavedProgress.current = false;
+                startPendingRef.current = false;
+                setSourceLoading(true); setStartPending(false);
+                setSourceId(source); setLoadError(false); setProgress(null);
                 setPending(null); setRequestError(''); setFormatError(''); setStorageConflict(false); setStorageFailed(false);
               }} />{' '}
               <strong>{random ? t.practice.setup.randomLevel : t.practice.setup.levelOption(index + 1)}</strong>
@@ -410,7 +458,13 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
         )}</div>
         {Object.values(bank.excluded).reduce((sum, value) => sum + value, 0) > 0 && <div style={{ color: 'var(--ash)', marginTop: 3 }}>{t.practice.setup.excluded(Object.values(bank.excluded).reduce((sum, value) => sum + value, 0))}</div>}
       </div>
-      {estimatedQuestions ? <button style={primary} onClick={() => startSession()}>{t.practice.setup.start}</button> : <><p role="status">{t.practice.setup.noQuestions}</p><Link href={sourceId === 'hsk-random' ? '/' : `/lesson/${encodeURIComponent(sourceId)}?mode=list`}>{t.practice.setup.backToList}</Link></>}
+      {estimatedQuestions ? <button style={{ ...primary, opacity: startPending ? .75 : 1 }} disabled={startPending} onClick={() => {
+        if (sourceLoading) {
+          startPendingRef.current = true;
+          setStartPending(true);
+        }
+        else startSession();
+      }}>{startPending ? <LoadingIndicator variant="inline" label={t.practice.loading} /> : t.practice.setup.start}</button> : <><p role="status">{t.practice.setup.noQuestions}</p><Link href={sourceId === 'hsk-random' ? '/' : `/lesson/${encodeURIComponent(sourceId)}?mode=list`}>{t.practice.setup.backToList}</Link></>}
     </section>
   );
 
@@ -445,7 +499,16 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
   const hasResult = result?.status === 'correct' || !!currentRecord.revealedAnswer;
   const descriptionId = isPinyin ? 'practice-pinyin-help' : 'practice-hanzi-help';
 
-  return <section style={panel} aria-labelledby="practice-kind">
+  return <>
+    <nav aria-label={t.practice.actions.changeSetup} style={{ marginBottom: 14 }}>
+      <button type="button" onClick={() => setConfirmReset(true)} style={{
+        ...button, display: 'inline-flex', alignItems: 'center', minHeight: 40,
+        boxShadow: '0 2px 8px rgba(15, 23, 42, 0.05)',
+      }}>
+        {t.common.back}
+      </button>
+    </nav>
+    <section style={panel} aria-labelledby="practice-kind">
     {feedbackEffect && <div className={`practice-feedback-burst practice-feedback-burst--${feedbackEffect}`} aria-hidden="true"><span>{feedbackEffect === 'correct' ? '✓' : '×'}</span></div>}
     {(storageFailed || storageConflict) && <div role="alert" style={{ padding: 10, background: 'var(--gold-light)', borderRadius: 8, marginBottom: 12 }}>{storageConflict ? t.practice.errors.otherTab : t.practice.errors.storageFailed}</div>}
     {localNotesError && <div role="alert" style={{ padding: 10, background: 'var(--red-light)', color: 'var(--red)', borderRadius: 8, marginBottom: 12 }}>{localNotesError}</div>}
@@ -474,17 +537,21 @@ export default function PracticeMode({ lessonId }: { lessonId: string }) {
     <div aria-live="polite" style={{ minHeight: 24, marginTop: 12 }}>
       {formatError && <div style={{ color: 'var(--red)' }}>{formatError}</div>}
       {requestError && <div role="alert" style={{ color: 'var(--red)' }}>{requestError}</div>}
-      {result && <div style={{ color: result.status === 'correct' ? '#2f7d50' : 'var(--red)', fontWeight: 700 }}>{result.feedback}</div>}
+      {result && <div className={`practice-result-panel practice-result-panel--${result.status}`} role="status">
+        <span className="practice-result-panel__icon" aria-hidden="true">{result.status === 'correct' ? '✓' : '×'}</span>
+        <div><strong>{result.feedback}</strong>{result.status === 'correct' && <p>{t.practice.feedback.enterNext}</p>}</div>
+      </div>}
       {currentRecord.revealedAnswer && <div style={{ color: 'var(--gold)', fontWeight: 700 }}>{t.practice.feedback.revealed}</div>}
       {shownAnswer && result?.issues?.map(issue => <div key={`${issue.kind}-${issue.expectedIndex}-${issue.actualIndex}`} style={{ fontSize: 13, marginTop: 3 }}>{issueMessage(issue)}</div>)}
     </div>
     {shownAnswer && answerCard(shownAnswer, () => speakChinese(shownAnswer.hanzi))}
     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 9, flexWrap: 'wrap', marginTop: 18, position: 'sticky', bottom: 10 }}>
-      {!hasResult ? <><button type="button" title={`Enter · ${t.practice.shortcuts.enter}`} style={primary} disabled={pending != null} onClick={() => void submit()}>{pending === 'check' ? <LoadingIndicator variant="inline" label={t.practice.loading} /> : t.practice.actions.check}</button><button type="button" style={button} disabled={pending != null} onClick={skip}>{t.practice.actions.skip}</button><button type="button" style={button} disabled={pending != null} onClick={() => void reveal()}>{pending === 'reveal' ? <LoadingIndicator variant="inline" label={t.practice.loading} /> : t.practice.actions.reveal}</button></> : <button type="button" style={primary} onClick={advance}>{progress.currentIndex + 1 >= progress.queue.length ? t.practice.actions.finish : t.practice.actions.next}</button>}
+      {!hasResult ? <><button type="button" title={`Enter · ${t.practice.shortcuts.enter}`} style={primary} disabled={pending != null} onClick={() => void submit()}>{pending === 'check' ? <LoadingIndicator variant="inline" label={t.practice.loading} /> : t.practice.actions.check}</button><button type="button" style={button} disabled={pending != null} onClick={skip}>{t.practice.actions.skip}</button><button type="button" title={t.practice.shortcuts.reveal} aria-keyshortcuts="/" style={button} disabled={pending != null} onClick={() => void reveal()}>{pending === 'reveal' ? <LoadingIndicator variant="inline" label={t.practice.loading} /> : t.practice.actions.reveal}</button></> : <button type="button" style={primary} onClick={advance}>{progress.currentIndex + 1 >= progress.queue.length ? t.practice.actions.finish : t.practice.actions.next}</button>}
     </div>
     {isPinyin ? <div id={descriptionId} style={{ marginTop: 22, paddingTop: 16, borderTop: '1px solid var(--border)', fontSize: 12.5, color: 'var(--ash)', lineHeight: 1.6 }}>
       <p style={{ margin: 0 }}>{t.practice.pinyinHelp.short}</p><strong>{t.practice.pinyinHelp.reminder}</strong>
       <details style={{ marginTop: 8 }}><summary style={{ cursor: 'pointer' }}>{t.practice.pinyinHelp.summary}</summary><table style={{ width: '100%', marginTop: 8, borderCollapse: 'collapse' }}><thead><tr><th>{t.practice.pinyinHelp.table.tone}</th><th>{t.practice.pinyinHelp.table.marked}</th><th>{t.practice.pinyinHelp.table.typed}</th></tr></thead><tbody>{[['1','mā','ma1'],['2','má','ma2'],['3','mǎ','ma3'],['4','mà','ma4'],[t.practice.pinyinHelp.table.neutral,'ma','ma5']].map(row => <tr key={row[2]}>{row.map(cell => <td key={cell} style={{ textAlign: 'center', padding: 4, borderTop: '1px solid var(--border)' }}>{cell}</td>)}</tr>)}</tbody></table></details>
     </div> : <p id={descriptionId} style={{ margin: '22px 0 0', paddingTop: 16, borderTop: '1px solid var(--border)', fontSize: 12.5, color: 'var(--ash)', lineHeight: 1.6 }}>{t.practice.hanziHelp}</p>}
-  </section>;
+    </section>
+  </>;
 }

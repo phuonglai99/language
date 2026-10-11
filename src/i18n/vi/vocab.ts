@@ -1,5 +1,6 @@
 /** UI text: vocab. See src/i18n/README.md. */
 export const vocab = {
+  meanings: { less: 'Thu gọn', more: (count: number) => `Xem thêm (${count} nghĩa)` },
   speech: {
     title: 'Giọng phát âm',
     automatic: 'Tự động (ưu tiên Quan thoại)',

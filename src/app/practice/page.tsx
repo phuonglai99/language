@@ -13,7 +13,9 @@ export default function PracticePage() {
       display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
       background: 'transparent',
     }}>
-      <PracticeMode lessonId="hsk-1" />
+      <div style={{ width: 'min(720px, 100%)' }}>
+        <PracticeMode lessonId="hsk-1" />
+      </div>
     </main>
   );
 }

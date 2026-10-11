@@ -39,16 +39,6 @@ export function findOrCreateSense(
 ): number | null {
   const vi = meaningVi.trim();
   if (!vi) return null;
-  const existing = db.prepare(
-    'SELECT id, hsk_level FROM word_senses WHERE word_id = ? AND lower(meaning_vi) = lower(?) ORDER BY position LIMIT 1',
-  ).get(wordId, vi) as { id: number; hsk_level: number | null } | undefined;
-  if (existing) {
-    if (hskLevel != null && (existing.hsk_level == null || hskLevel < existing.hsk_level)) {
-      db.prepare('UPDATE word_senses SET hsk_level = ? WHERE id = ?').run(hskLevel, existing.id);
-    }
-    return existing.id;
-  }
-
   const { codes } = parsePosLabels(posLabel);
   const insert = db.prepare(`
     INSERT INTO word_senses (word_id, position, pos, meaning_vi, hsk_level, source)
@@ -56,8 +46,20 @@ export function findOrCreateSense(
   `);
   let first: number | null = null;
   for (const pos of codes.length ? codes : [null]) {
-    const id = Number(insert.run(wordId, wordId, pos, vi, hskLevel, source).lastInsertRowid);
-    first ??= id;
+    const existing = db.prepare(`
+      SELECT id, hsk_level FROM word_senses
+      WHERE word_id = ? AND lower(meaning_vi) = lower(?) AND pos IS ?
+      ORDER BY position LIMIT 1
+    `).get(wordId, vi, pos) as { id: number; hsk_level: number | null } | undefined;
+    if (existing) {
+      if (hskLevel != null && (existing.hsk_level == null || hskLevel < existing.hsk_level)) {
+        db.prepare('UPDATE word_senses SET hsk_level = ? WHERE id = ?').run(hskLevel, existing.id);
+      }
+      first ??= existing.id;
+    } else {
+      const id = Number(insert.run(wordId, wordId, pos, vi, hskLevel, source).lastInsertRowid);
+      first ??= id;
+    }
   }
   syncWordSearch(db, wordId);
   return first;

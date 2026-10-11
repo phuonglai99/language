@@ -9,6 +9,7 @@ import { LoadingIndicator } from '@/app/components/LoadingIndicator';
 import { t } from '@/i18n';
 
 interface VocabItem {
+  senses?: import("@/types").VocabSense[];
   lessonId: string; lessonTitle: string;
   zh: string; py: string; pos: string; vn: string;
   ex: { zh: string; vn: string };
@@ -52,7 +53,7 @@ function VocabLevelContent({ level }: { level: string }) {
   }, [level]);
 
   const filtered = search.trim()
-    ? items.filter(it => it.zh.includes(search) || it.py.toLowerCase().includes(search.toLowerCase()) || it.vn.toLowerCase().includes(search.toLowerCase()))
+    ? items.filter(it => it.zh.includes(search) || it.py.toLowerCase().includes(search.toLowerCase()) || it.vn.toLowerCase().includes(search.toLowerCase()) || it.senses?.some(sense => sense.meaning.toLowerCase().includes(search.toLowerCase())))
     : items;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -105,7 +106,7 @@ function VocabLevelContent({ level }: { level: string }) {
             {pageItems.map((it, i) => (
               <VocabListCard
                 key={i}
-                item={{ zh: it.zh, py: it.py, pos: it.pos, vn: it.vn, ex: it.ex, lessonBadge: it.lessonTitle }}
+                item={{ senses: it.senses, zh: it.zh, py: it.py, pos: it.pos, vn: it.vn, ex: it.ex, lessonBadge: it.lessonTitle }}
                 accent={accent}
                 num={(currentPage - 1) * PAGE_SIZE + i + 1}
                 href={`/lesson/${it.lessonId}?mode=flash&word=${encodeURIComponent(it.zh)}`}

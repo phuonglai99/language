@@ -4,7 +4,7 @@ import { PARTS_OF_SPEECH } from '@/shared/pos';
 import { addSenseExample, findOrCreateSense, findOrCreateWord, syncWordSearch } from './words';
 import type { HanziiWord } from '../third-party-service/hanzii';
 
-const POS: Record<string, string> = { a: 'adj', d: 'adv', r: 'pron', p: 'prep', c: 'conj', u: 'part', e: 'intj', nr: 'propn', ns: 'propn', sv: 'vo' };
+const POS: Record<string, string> = { a: 'adj', d: 'adv', r: 'pron', p: 'prep', c: 'conj', u: 'part', e: 'intj', nr: 'propn', ns: 'propn', sv: 'vo', pro: 'pron', numb: 'num', measure: 'm', nlocal: 'n', time: 'n', locativ: 'n', mpart: 'part', idioms: 'phrase', proverb: 'phrase', locution: 'phrase', sentence: 'phrase' };
 
 export function matchesHanziiWord(word: { hanzi: string; pinyin: string }, entry: HanziiWord): boolean {
   return word.hanzi === entry.word && neutralToneVariants(
@@ -12,7 +12,15 @@ export function matchesHanziiWord(word: { hanzi: string; pinyin: string }, entry
   );
 }
 
-/** Imported dictionary senses retain their provenance in note; existing senses are untouched. */
+export function hanziiPosCodes(raw: string): string[] {
+  return [...new Set(raw.split(/[,/]/).map(value => {
+    const label = value.trim();
+    const code = POS[label] ?? label;
+    return PARTS_OF_SPEECH.some(([value]) => value === code) ? code : null;
+  }).filter((value): value is string => value !== null))];
+}
+
+/** Imported dictionary senses retain their provenance and distinct parts of speech. */
 export function saveHanziiWord(db: Database.Database, entry: HanziiWord, targetWordId?: number): number {
   return db.transaction(() => {
     if (targetWordId != null) {
@@ -25,19 +33,24 @@ export function saveHanziiWord(db: Database.Database, entry: HanziiWord, targetW
     const wordId = targetWordId ?? findOrCreateWord(db, entry.word, entry.pinyin, 'import');
     for (const content of entry.content) {
       const rawPos = content.kind ?? '';
-      const pos = POS[rawPos] ?? rawPos;
-      const label = PARTS_OF_SPEECH.some(([code]) => code === pos) ? pos : '';
-      for (const sense of content.means ?? []) {
-        if (typeof sense.mean !== 'string' || !sense.mean.trim()) continue;
-        const existing = db.prepare('SELECT id FROM word_senses WHERE word_id = ? AND lower(meaning_vi) = lower(?)').get(wordId, sense.mean.trim());
-        const id = findOrCreateSense(db, wordId, sense.mean, label, 'import');
-        if (id == null) continue;
-        if (!existing) db.prepare('UPDATE word_senses SET note = ? WHERE id = ?')
-          .run(`Hanzii word ${entry.id}: https://hanzii.net/search/word/${encodeURIComponent(entry.word)}?hl=vi`, id);
-        for (const ex of sense.examples ?? []) {
-          if (typeof ex.e !== 'string') continue;
-          addSenseExample(db, id, ex.e, typeof ex.m === 'string' ? ex.m : '');
-          if (ex.p) db.prepare('UPDATE sense_examples SET pinyin = COALESCE(pinyin, ?) WHERE sense_id = ? AND zh = ?').run(ex.p, id, ex.e.trim());
+      const labels = hanziiPosCodes(rawPos);
+      for (const label of labels.length ? labels : ['']) {
+        for (const sense of content.means ?? []) {
+          if (typeof sense.mean !== 'string' || !sense.mean.trim()) continue;
+          // A formerly unknown Hanzii tag can now be recognized; keep its sense ID.
+          if (label) db.prepare(`UPDATE word_senses SET pos = ? WHERE word_id = ?
+            AND lower(meaning_vi) = lower(?) AND pos IS NULL AND verified = 0
+            AND note LIKE ?`).run(label, wordId, sense.mean.trim(), `Hanzii word ${entry.id}:%`);
+          const existing = db.prepare('SELECT id FROM word_senses WHERE word_id = ? AND lower(meaning_vi) = lower(?) AND pos IS ?').get(wordId, sense.mean.trim(), label || null);
+          const id = findOrCreateSense(db, wordId, sense.mean, label, 'import');
+          if (id == null) continue;
+          if (!existing) db.prepare('UPDATE word_senses SET note = ? WHERE id = ?')
+            .run(`Hanzii word ${entry.id}: https://hanzii.net/search/word/${encodeURIComponent(entry.word)}?hl=vi`, id);
+          for (const ex of sense.examples ?? []) {
+            if (typeof ex.e !== 'string') continue;
+            addSenseExample(db, id, ex.e, typeof ex.m === 'string' ? ex.m : '');
+            if (ex.p) db.prepare('UPDATE sense_examples SET pinyin = COALESCE(pinyin, ?) WHERE sense_id = ? AND zh = ?').run(ex.p, id, ex.e.trim());
+          }
         }
       }
     }

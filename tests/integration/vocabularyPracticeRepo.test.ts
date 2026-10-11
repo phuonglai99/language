@@ -77,3 +77,24 @@ test('random HSK practice source includes words from every HSK level in the data
     assert.equal(bank.counts['hanzi-to-pinyin'], 2);
   } finally { db.close(); }
 });
+
+test('practice answers include all meanings without leaking them into prompts', () => {
+  const db = new Database(':memory:');
+  try {
+    migrate(db);
+    const wordId = Number(db.prepare("INSERT INTO words (hanzi, pinyin, pinyin_plain, hsk_level, source) VALUES ('工作', 'gōngzuò', 'gongzuo', 1, 'manual')").run().lastInsertRowid);
+    db.prepare("INSERT OR IGNORE INTO parts_of_speech (code, name_vi, name_zh) VALUES ('v', 'Động từ', '动词'), ('n', 'Danh từ', '名词')").run();
+    const insert = db.prepare("INSERT INTO word_senses (word_id, position, pos, meaning_vi, meaning_en, source) VALUES (?, ?, ?, ?, ?, 'manual')");
+    insert.run(wordId, 0, 'v', 'làm việc', null);
+    insert.run(wordId, 1, 'n', 'công việc', null);
+    insert.run(wordId, 2, null, null, 'task');
+    const bank = getVocabularyPracticeBank('hsk-1', db)!;
+    const answer = [...bank.internal.values()][0].answer;
+    assert.deepEqual(answer.senses?.map(({ pos, meaning }) => ({ pos, meaning })), [
+      { pos: 'Động từ', meaning: 'làm việc' },
+      { pos: 'Danh từ', meaning: 'công việc' },
+      { pos: '', meaning: 'task' },
+    ]);
+    assert.ok(bank.questions.every(question => !('senses' in question)));
+  } finally { db.close(); }
+});

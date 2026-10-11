@@ -1,4 +1,6 @@
 import type Database from 'better-sqlite3';
+import { preferredStoredHanziiPos, reconcileStoredHanziiPos } from '../repos/storedHanziiPos';
+import { reconcileCachedCharacterPos } from '../repos/hanziiCharacterPos';
 import { getDb } from '../db/connection';
 import { addSenseExample, findOrCreateSense, findOrCreateWord } from '../repos/words';
 import { firstReading, hanChars, stripNotes } from '@/shared/text';
@@ -61,7 +63,11 @@ function importVocab(db: Database.Database, draft: LessonDraft, listLevel: numbe
     for (const ch of hanChars(hanzi)) ensureChar.run(ch);
     const wordId = findOrCreateWord(db, hanzi, firstReading(stripNotes(v.py ?? '')), 'import');
     markWord.run(listLevel, listLevel, listLevel, wordId);
-    const senseId = findOrCreateSense(db, wordId, v.vn ?? '', v.pos ?? '', 'import', senseLevel);
+    const pos = preferredStoredHanziiPos(db, wordId, v.vn ?? '') ?? v.pos ?? '';
+    const senseId = findOrCreateSense(db, wordId, v.vn ?? '', pos, 'import', senseLevel);
+    reconcileStoredHanziiPos(db, wordId);
+    const savedWord = db.prepare('SELECT id, hanzi, pinyin FROM words WHERE id = ?').get(wordId) as { id: number; hanzi: string; pinyin: string };
+    reconcileCachedCharacterPos(db, savedWord);
     if (senseId != null && v.ex?.zh) addSenseExample(db, senseId, v.ex.zh, v.ex.vn ?? '');
     saveComponents(db, v.botu);
     out.push([wordId, senseId]);

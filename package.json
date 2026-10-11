@@ -18,6 +18,7 @@
     "migrate:v4:report": "tsx scripts/migrate-v4/report.ts",
     "crawl:kanji": "tsx scripts/crawl-hanzii.ts",
     "patch:audio": "tsx scripts/patch-audio-urls.ts",
+    "repair:pos": "tsx scripts/reconcile-hanzii-pos.ts",
     "crawl:words": "tsx scripts/crawl-hanzii-words.ts"
   },
   "dependencies": {

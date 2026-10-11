@@ -136,6 +136,8 @@ export interface CharacterDetailDTO {
   popular: number | null;
   pos: string | null;
   meansTdpt: string[];
+  /** Vietnamese part-of-speech label aligned with each meansTdpt entry. */
+  meaningPartsOfSpeech: (string | null)[];
   meansTg: string[];
   meansTdtd: string[];
   strokesSvg: StrokeData | null;
@@ -159,6 +161,7 @@ export interface LessonMetaDTO {
 }
 
 export interface LevelVocabItemDTO {
+  senses?: import("@/types").VocabSense[];
   lessonId: string;
   lessonTitle: string;
   zh: string;
@@ -169,6 +172,7 @@ export interface LevelVocabItemDTO {
 }
 
 export interface SearchResultDTO {
+  senses?: import("@/types").VocabSense[];
   /** Lesson the word belongs to; null for dictionary words outside any lesson. */
   lessonId: string | null;
   lessonTitle: string;
@@ -198,6 +202,7 @@ export type PracticeQuestionDTO =
   | (PracticeQuestionBaseDTO & { kind: 'vi-to-hanzi'; meaningVi: string; exampleVi: string });
 
 export interface PracticeAnswerDTO {
+  senses?: import("@/types").VocabSense[];
   hanzi: string;
   pinyin: string;
   pinyinNumber: string;

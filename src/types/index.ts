@@ -9,7 +9,14 @@ export interface BotuBlock {
   parts: BotuPart[];
 }
 
+export interface VocabSense {
+  id: number;
+  pos: string;
+  meaning: string;
+}
+
 export interface VocabCard {
+  senses?: VocabSense[];
   id: string;
   zh: string;
   py: string;

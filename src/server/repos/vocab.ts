@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { getWordSenses } from './wordSenses';
 import { getDb } from '../db/connection';
 import { hskLessonId, parseLessonId } from '@/shared/lessons';
 import { posNameVi } from '@/shared/pos';
@@ -29,7 +30,7 @@ const LIST_CARD_SELECT = `
   SELECT ${CARD_COLUMNS}
   FROM words w
   LEFT JOIN word_senses s ON s.id = (
-    SELECT id FROM word_senses WHERE word_id = w.id ORDER BY NULLIF(trim(meaning_vi), '') IS NULL, position LIMIT 1
+    SELECT id FROM word_senses WHERE word_id = w.id ORDER BY NULLIF(trim(meaning_vi), '') IS NULL, verified DESC, COALESCE(note, '') LIKE '%Hanzii word %' DESC, position LIMIT 1
   )
   LEFT JOIN sense_examples e ON e.sense_id = s.id AND e.position = (
     SELECT MIN(position) FROM sense_examples WHERE sense_id = s.id
@@ -45,7 +46,7 @@ const LESSON_CARD_SELECT = `
   FROM lesson_words lw
   JOIN words w ON w.id = lw.word_id
   LEFT JOIN word_senses s ON s.id = COALESCE(lw.sense_id, (
-    SELECT id FROM word_senses WHERE word_id = w.id ORDER BY NULLIF(trim(meaning_vi), '') IS NULL, position LIMIT 1
+    SELECT id FROM word_senses WHERE word_id = w.id ORDER BY NULLIF(trim(meaning_vi), '') IS NULL, verified DESC, COALESCE(note, '') LIKE '%Hanzii word %' DESC, position LIMIT 1
   ))
   LEFT JOIN sense_examples e ON e.sense_id = s.id AND e.position = (
     SELECT MAX(position) FROM sense_examples WHERE sense_id = s.id
@@ -84,6 +85,7 @@ function botuFor(db: Database.Database, hanzi: string): VocabCard['botu'] {
 function toCard(db: Database.Database, r: WordCardRow): VocabCard {
   return {
     id: `w${r.id}`,
+    senses: getWordSenses(db, r.id, r.sense_id),
     zh: r.hanzi,
     py: r.pinyin,
     pos: posNameVi(r.pos),
@@ -183,7 +185,7 @@ export async function listVocabByLevel(level: string): Promise<LevelVocabItemDTO
   const out: LevelVocabItemDTO[] = [];
   const push = (rows: WordCardRow[], lessonId: string, lessonTitle: string) => {
     for (const r of rows) {
-      out.push({ lessonId, lessonTitle, zh: r.hanzi, py: r.pinyin, pos: posNameVi(r.pos), vn: r.meaning ?? '', ex: { zh: r.ex_zh ?? '', vn: r.ex_vi ?? '' } });
+      out.push({ senses: getWordSenses(db, r.id, r.sense_id), lessonId, lessonTitle, zh: r.hanzi, py: r.pinyin, pos: posNameVi(r.pos), vn: r.meaning ?? '', ex: { zh: r.ex_zh ?? '', vn: r.ex_vi ?? '' } });
     }
   };
   push(db.prepare(`${LIST_CARD_SELECT} WHERE w.hsk_level = ? ORDER BY w.pinyin_plain, w.hanzi`).all(n) as WordCardRow[], hskLessonId(n), `HSK${n}`);
@@ -238,6 +240,7 @@ export async function searchWords(query: string, limit = 40, db: Database.Databa
     const inList = r.hsk_level != null && r.hsk_level <= 6;
     const [lessonId, lessonTitle] = r.lesson ? r.lesson.split('\t') : [null, ''];
     return {
+      senses: getWordSenses(db, r.id, r.sense_id),
       lessonId: inList ? hskLessonId(r.hsk_level!) : lessonId,
       lessonTitle: inList ? `HSK${r.hsk_level}` : lessonTitle,
       level: inList ? `HSK${r.hsk_level}` : '',

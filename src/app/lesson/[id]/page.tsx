@@ -293,7 +293,7 @@ export default function LessonPage() {
                   return (
                     <VocabListCard
                       key={absIdx}
-                      item={{ zh: v.zh, py: v.py, pos: v.pos, vn: v.vn, ex: v.ex }}
+                      item={{ senses: v.senses, zh: v.zh, py: v.py, pos: v.pos, vn: v.vn, ex: v.ex }}
                       accent="var(--blue)"
                       num={absIdx + 1}
                       onClick={() => { setQueue([...lesson.vocab]); setIdx(absIdx); setFlipped(false);  setMode('flash'); }}
