@@ -54,10 +54,13 @@ async function main() {
       report.checked++;
     }));
     flush();
+    // SQLite statements allocate native memory; collect between batches on small VPS hosts.
+    if (i % 99 === 0) global.gc?.();
     if (i % 99 === 0) console.log(`${report.checked}/${words.length}, errors=${report.errors.length}`);
     if (report.errors.length >= 15 && report.results.length === 0) throw new Error('Dictionary unavailable; stopped without modifying senses');
     if (fetchMissing) await new Promise(resolve => setTimeout(resolve, 150));
   }
+  db.close();
   report.completedAt = new Date().toISOString();
   flush();
   console.log(`Done: ${report.checked}, errors=${report.errors.length}; report=${reportFile}`);
