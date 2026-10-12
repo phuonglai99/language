@@ -105,3 +105,30 @@ pm2 save
 ```
 
 Kiểm tra HTTP sau rollback. Việc tạo lại tiến trình có gián đoạn ngắn. Không khôi phục bản backup DB nếu chưa đánh giá các ghi phát sinh sau deploy.
+
+## Production đã triển khai ngày 2026-10-12
+
+- URL: http://139.59.109.45:3000
+- Release: `/var/www/hsk-releases/20261012T080119Z-b0fa14a`.
+- Source ứng dụng: `b0fa14a1c42a45c4e6caccfffcb4912babd7e052`; script đối chiếu được cập nhật bằng commit `afeaad5d730d83f1cf4089f7d1ed8d384dbf37c3` để đóng DB và hỗ trợ thu hồi bộ nhớ giữa batch. Thay đổi này không sửa mã ứng dụng đã build. `release-manifest.json` ghi cả hai commit và hash script.
+- Archive source SHA-256: `e770e767252d0727f6c80b269fc1b54ecef1af77c2f8659faa136d5cad3afa39`.
+- PM2 `hsk-web` online, đã xác minh `pm_cwd` đúng release và chạy `pm2 save`.
+- DB tiếp tục dùng `/var/www/hsk-web/data/hsk.db`; không chép đè bằng DB local.
+- Backup trước cập nhật: `/var/backups/hsk-web/20261012T080119Z-b0fa14a/hsk.db` và `hsk-pre-switch.db`, dùng SQLite backup API và kiểm tra quick_check.
+- Cấu hình release/rollback (chứa môi trường tiến trình, quyền 600) nằm trong cùng thư mục backup. Không đưa lên Git.
+- Dependency Linux được tái sử dụng qua symlink `/var/www/hsk-web/node_modules` sau khi xác nhận lockfile SHA-256 khớp `7798793610cc25e3e191325302f386b5518e66a4fa7d2bac91abe256f436643a`. Không sửa dependency dùng chung khi các release còn sử dụng.
+- Trên VPS: `npm run check` đạt 36 tests, TypeScript và lint không lỗi (4 cảnh báo ảnh/font); build Webpack với một worker và heap 384 MB đạt.
+- Cache Hanzii đã lưu được đưa riêng vào release và thử trên bản sao DB trước. Bản sao giữ nguyên số từ, bài học, liên kết bài học, bài đọc, ghi chú và lịch sử thi; quick_check và foreign_key_check đạt.
+- Đối chiếu prod chạy offline với `node --expose-gc --import tsx scripts/reconcile-hanzii-pos.ts --replay-cache`, heap 256 MB. Đã cập nhật **1.167 POS của nghĩa có sẵn**, giữ nguyên ID nghĩa; DB qua quick_check và foreign_key_check. Không tự gán từ loại cho các nghĩa chưa có đối chiếu chắc chắn.
+- Staging nội bộ 3108 đã dừng. Sau chuyển prod, 12 trang/API trả 200; kiểm tra bên ngoài đạt cho trang chủ, luyện nhập, từ vựng HSK2 và số bài đọc. `过` trả về “Động từ” và 19 nghĩa.
+- Lưu log `check.log`, `build.log`, `staging-data.log`, `production-data.log` trong thư mục backup. Các báo cáo đối chiếu JSON nằm ở `data/` của release; đường dẫn cụ thể có ở cuối log.
+
+Rollback **code**, giữ DB hiện tại (schema không đổi):
+
+```bash
+pm2 delete hsk-web
+pm2 start /var/backups/hsk-web/20261012T080119Z-b0fa14a/rollback.config.json
+pm2 save
+```
+
+Kiểm tra HTTP sau rollback. Không tự động restore DB vì có thể có ghi mới sau triển khai. Giữ release cũ và các backup để phục hồi khi cần.
